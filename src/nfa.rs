@@ -6,7 +6,7 @@ use std::hash::Hash;
 // ranges of Unicode codepoints.
 // use regex_syntax::utf8::{Utf8Sequence, Utf8Sequences};
 #[derive(Debug)]
-pub struct NFA<T: Copy + Eq + Hash> {
+pub struct NFA<T: Clone + Eq + Hash> {
     initial_state: u32,
     total_states: u32,
     final_states: HashSet<u32>,
@@ -24,7 +24,7 @@ pub struct NFA<T: Copy + Eq + Hash> {
 // }};
 // }
 
-impl<T: Copy + Eq + Hash> NFA<T> {
+impl<T: Clone + Eq + Hash> NFA<T> {
     /// Create a new NFA with a single initial state.
     pub fn new() -> Self {
         NFA {
@@ -45,7 +45,7 @@ impl<T: Copy + Eq + Hash> NFA<T> {
         nfa
     }
 
-    /// Copy the states and transitions of an NFA into another. The initial and final states of the
+    /// Clone the states and transitions of an NFA into another. The initial and final states of the
     /// source are not marked as such in the destination.
     pub fn copy_into(dest: &mut NFA<T>, src: &NFA<T>) {
         let offset = dest.total_states;
@@ -54,10 +54,10 @@ impl<T: Copy + Eq + Hash> NFA<T> {
             dest.add_state(false);
         }
 
-        // Copy the transitions.
+        // Clone the transitions.
         for (start, label, ends) in src.transition.into_iter() {
             for end in ends {
-                dest.add_transition(*start + offset, *end + offset, *label);
+                dest.add_transition(*start + offset, *end + offset, (*label).clone());
             }
         }
     }
@@ -84,6 +84,30 @@ impl<T: Copy + Eq + Hash> NFA<T> {
         new_nfa.add_epsilon_transition(initial_state, c2.initial_state + offset);
         for c2_final in c2.final_states.iter() {
             new_nfa.add_epsilon_transition(*c2_final + offset, final_state);
+        }
+
+        new_nfa
+    }
+
+    /// Construct a new NFA for the concatenation operator of two NFAs. The start state of the
+    /// preceding NFA becomes the start state of the new NFA. The final states of the following NFA
+    /// are the final states of the new NFA. There are epsilon transitions from the final states of
+    /// the former to the start state of the latter.
+    pub fn concatenation(c1: &NFA<T>, c2: &NFA<T>) -> NFA<T> {
+        let mut new_nfa = c1.clone();
+
+        let offset = new_nfa.total_states;
+        NFA::copy_into(&mut new_nfa, &c2);
+
+        // Epsilon transitions from c1 finals to initial of c2
+        for c1_final in c1.final_states.iter() {
+            new_nfa.add_epsilon_transition(*c1_final, c2.initial_state + offset);
+        }
+        new_nfa.final_states = HashSet::new();
+
+        // Set final states
+        for c2_final in c2.final_states.iter() {
+            new_nfa.final_states.insert(c2_final + offset);
         }
 
         new_nfa
@@ -121,8 +145,19 @@ impl<T: Copy + Eq + Hash> NFA<T> {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub enum Transition<T: Copy + Eq + Hash> {
+impl<T: Clone + Eq + Hash> Clone for NFA<T> {
+    fn clone(&self) -> Self {
+        NFA {
+            total_states: self.total_states,
+            initial_state: self.initial_state,
+            final_states: self.final_states.clone(),
+            transition: self.transition.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum Transition<T: Clone + Eq + Hash> {
     Some(T),
     Epsilon,
 }
@@ -159,13 +194,13 @@ mod tests {
     fn test_add_state() {
         let mut n: NFA<bool> = NFA::new();
         let new_state = n.add_state(false);
-        assert_eq!(n.total_states, 2);
+        assert_eq!(2, n.total_states);
         assert_eq!(n.total_states - 1, new_state);
         assert_eq!(0, n.final_states.len());
 
         let mut n: NFA<bool> = NFA::new();
         let new_state = n.add_state(true);
-        assert_eq!(n.total_states, 2);
+        assert_eq!(2, n.total_states);
         assert_eq!(n.total_states - 1, new_state);
         assert_eq!(1, n.final_states.len());
     }
@@ -176,6 +211,18 @@ mod tests {
         let c2: NFA<bool> = NFA::new_epsilon();
 
         let union = NFA::union(&c1, &c2);
-        println!("{:?}", union);
+        assert_eq!(6, union.total_states);
+        assert_eq!(1, union.final_states.len());
+    }
+
+    #[test]
+    fn test_concatenation() {
+        let c1: NFA<bool> = NFA::new_epsilon();
+        let c2: NFA<bool> = NFA::new_epsilon();
+
+        let concat = NFA::concatenation(&c1, &c2);
+        assert_eq!(4, concat.total_states);
+        assert_eq!(c2.final_states.len(), concat.final_states.len());
+        assert_eq!(c1.initial_state, concat.initial_state);
     }
 }

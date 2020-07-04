@@ -60,9 +60,22 @@ where
     }
 }
 
+impl<T, U, V> Clone for Table<T, U, V>
+where
+    T: Clone + Eq + Hash,
+    U: Clone + Eq + Hash,
+    V: Clone,
+{
+    fn clone(&self) -> Self {
+        Table {
+            map: self.map.clone(),
+        }
+    }
+}
+
 impl<'a, T, U, V> IntoIterator for &'a Table<T, U, V>
 where
-    T: Copy + Eq + Hash,
+    T: Clone + Eq + Hash,
     U: Eq + Hash,
 {
     type Item = (&'a T, &'a U, &'a V);
