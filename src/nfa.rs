@@ -113,6 +113,24 @@ impl<T: Clone + Eq + Hash> NFA<T> {
         new_nfa
     }
 
+    /// Construct a new NFA for the kleene star operator of an NFA.
+    pub fn kleene_star(c1: &NFA<T>) -> NFA<T> {
+        let mut new_nfa = NFA::new_epsilon();
+        let offset = new_nfa.total_states;
+
+        NFA::copy_into(&mut new_nfa, &c1);
+        new_nfa.add_epsilon_transition(new_nfa.initial_state, c1.initial_state + offset);
+
+        for c1_final in c1.final_states.iter() {
+            new_nfa.add_epsilon_transition(c1_final + offset, c1.initial_state + offset);
+            for final_state in new_nfa.final_states.clone().iter() {
+                new_nfa.add_epsilon_transition(c1_final + offset, *final_state);
+            }
+        }
+
+        new_nfa
+    }
+
     /// Add a state to the NFA. The label of the state is returned. The total number of states is
     /// always greater than the label of the newest state by 1.
     pub fn add_state(&mut self, is_final: bool) -> u32 {
@@ -224,5 +242,14 @@ mod tests {
         assert_eq!(4, concat.total_states);
         assert_eq!(c2.final_states.len(), concat.final_states.len());
         assert_eq!(c1.initial_state, concat.initial_state);
+    }
+
+    #[test]
+    fn test_kleene_star() {
+        let c1: NFA<bool> = NFA::new_epsilon();
+
+        let kleene = NFA::kleene_star(&c1);
+        assert_eq!(4, kleene.total_states);
+        assert_eq!(1, kleene.final_states.len());
     }
 }
