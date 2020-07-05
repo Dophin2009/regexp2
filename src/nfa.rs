@@ -178,7 +178,7 @@ where
         let transitions = self.transitions_from(state);
         transitions
             .into_iter()
-            .filter(|(&t, _)| t == Transition::Epsilon)
+            .filter(|(t, _)| **t == Transition::Epsilon)
             .flat_map(|(_, dest)| dest.into_iter().map(|&i| i))
             .collect()
     }
@@ -244,9 +244,14 @@ where
     type Item = HashSet<u32>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let c = self.input.next();
-        self.state_set = self.epsilon_closure_set(&self.state_set);
-        Some(self.state_set)
+        let c = match self.input.next() {
+            Some(c) => c,
+            None => return None,
+        };
+
+        let moved_set = self.move_set(&self.state_set, &c);
+        self.state_set = self.epsilon_closure_set(&moved_set);
+        Some(self.state_set.clone())
     }
 }
 
@@ -264,10 +269,27 @@ where
     }
 
     fn epsilon_closure_set(&self, state_set: &HashSet<u32>) -> HashSet<u32> {
-        let set = HashSet::new();
+        let mut set = HashSet::new();
         for state in state_set.iter() {
             let state_closure = self.nfa.epsilon_closure(*state);
             set = set.union(&state_closure).map(|&i| i).collect();
+        }
+        set
+    }
+
+    fn move_set(&self, state_set: &HashSet<u32>, input: &S) -> HashSet<u32> {
+        let mut set = HashSet::new();
+        for state in state_set.iter() {
+            let transitions = self.nfa.transitions_from(*state);
+            let input_transitions = transitions
+                .into_iter()
+                .filter(|(t, _)| match *t {
+                    Transition::Some(symbol) => *symbol == *input,
+                    Transition::Epsilon => false,
+                })
+                .flat_map(|(_, dest)| dest.into_iter().map(|&i| i))
+                .collect();
+            set = set.union(&input_transitions).map(|&i| i).collect();
         }
         set
     }

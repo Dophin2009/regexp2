@@ -69,7 +69,7 @@ where
     }
 
     pub fn get_col(&self, col: &U) -> HashMap<&T, &V> {
-        let result = HashMap::new();
+        let mut result = HashMap::new();
         for (row, column_map) in self.map.iter() {
             for (column_key, val) in column_map.iter() {
                 if *column_key == *col {
