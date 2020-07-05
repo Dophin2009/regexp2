@@ -44,6 +44,10 @@ where
             }
         }
 
+        if expr.len() == 0 {
+            state.op_stack.push(Operator::EmptyPlaceholder);
+        }
+
         while !state.op_stack.is_empty() {
             state.reduce_stack()?;
         }
