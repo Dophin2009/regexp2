@@ -1,3 +1,5 @@
+use crate::nfa::NFAParser;
+
 pub struct RegExp {
     expr: String,
 }

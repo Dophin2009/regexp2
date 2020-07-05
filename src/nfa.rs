@@ -1,6 +1,8 @@
+use crate::parser::{self, Operator, ParseError, Parser};
 use crate::table::Table;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
+use std::marker::PhantomData;
 
 // Use the regex-syntax crate to convert ranges of Unicode scalar values to equivalent sets of
 // ranges of Unicode codepoints.
@@ -292,6 +294,60 @@ where
             set = set.union(&input_transitions).map(|&i| i).collect();
         }
         set
+    }
+}
+
+pub trait NFAParser<T>: Parser<NFA<T>>
+where
+    T: Clone + Eq + Hash,
+{
+    fn make_transition(&self, c: char) -> Transition<T>;
+
+    fn shift_action(
+        &self,
+        stack: &mut Vec<NFA<T>>,
+        _: &mut Vec<Operator>,
+        c: char,
+    ) -> parser::Result<()> {
+        let transition = self.make_transition(c);
+
+        let mut nfa = NFA::new();
+        let final_state = nfa.add_state(true);
+        nfa.add_transition(nfa.initial_state, final_state, transition);
+
+        stack.push(nfa);
+
+        Ok(())
+    }
+
+    fn reduce_action(
+        &self,
+        stack: &mut Vec<NFA<T>>,
+        op_stack: &mut Vec<Operator>,
+    ) -> parser::Result<()> {
+        let op = op_stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+        let new_nfa: NFA<T>;
+
+        match op {
+            Operator::Union => {
+                let c2 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                let c1 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                new_nfa = NFA::union(&c1, &c2);
+            }
+            Operator::Concatenation => {
+                let c2 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                let c1 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                new_nfa = NFA::concatenation(&c1, &c2);
+            }
+            Operator::KleeneStar => {
+                let c1 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                new_nfa = NFA::kleene_star(&c1);
+            }
+            _ => return Err(ParseError::UnbalancedParentheses),
+        }
+
+        stack.push(new_nfa);
+        Ok(())
     }
 }
 

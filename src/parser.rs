@@ -1,6 +1,7 @@
 use std::error;
 use std::fmt;
-use std::marker::PhantomData;
+
+pub type Result<T> = std::result::Result<T, ParseError>;
 
 #[derive(Debug, PartialEq)]
 pub enum Operator {
@@ -10,23 +11,20 @@ pub enum Operator {
     LeftParen,
 }
 
-#[derive(Debug)]
-pub struct Parser<T, F>
+pub trait Parser<T>
 where
-    T: Copy,
-    F: Copy + FnMut(&ParserState<T, F>, Operator) -> T,
+    T: Clone,
 {
-    parser_action: F,
-    _phantom: PhantomData<T>,
-}
+    fn shift_action(&self, stack: &mut Vec<T>, op_stack: &mut Vec<Operator>, c: char)
+        -> Result<()>;
 
-impl<T, F> Parser<T, F>
-where
-    T: Copy,
-    F: Copy + FnMut(&ParserState<T, F>, Operator) -> T,
-{
-    pub fn parse(&self, expr: &str) -> Result<(), ParseError> {
-        let mut state = ParserState::new(self.parser_action);
+    fn reduce_action(&self, stack: &mut Vec<T>, op_stack: &mut Vec<Operator>) -> Result<()>;
+
+    fn parse(&self, expr: &str) -> Result<Option<T>> {
+        let mut state = ParserState::new(
+            |stack, op_stack, c| self.shift_action(stack, op_stack, c),
+            |stack, op_stack| self.reduce_action(stack, op_stack),
+        );
 
         for c in expr.chars() {
             if state.escaped {
@@ -44,14 +42,20 @@ where
             }
         }
 
-        Ok(())
+        while !state.op_stack.is_empty() {
+            state.reduce_stack()?;
+        }
+
+        let head = state.stack.into_iter().last();
+        Ok(head)
     }
 }
 
 #[derive(Debug)]
-struct ParserState<T, F>
+struct ParserState<T, SF, RF>
 where
-    F: FnMut(&ParserState<T, F>, Operator) -> T,
+    SF: Copy + FnMut(&mut Vec<T>, &mut Vec<Operator>, char) -> Result<()>,
+    RF: Copy + FnMut(&mut Vec<T>, &mut Vec<Operator>) -> Result<()>,
 {
     stack: Vec<T>,
     op_stack: Vec<Operator>,
@@ -60,14 +64,16 @@ where
     escaped: bool,
     insert_concat: bool,
 
-    parser_action: F,
+    shift_action: SF,
+    reduce_action: RF,
 }
 
-impl<T, F> ParserState<T, F>
+impl<T, SF, RF> ParserState<T, SF, RF>
 where
-    F: FnMut(&ParserState<T, F>, Operator) -> T,
+    SF: Copy + FnMut(&mut Vec<T>, &mut Vec<Operator>, char) -> Result<()>,
+    RF: Copy + FnMut(&mut Vec<T>, &mut Vec<Operator>) -> Result<()>,
 {
-    fn new(parser_action: F) -> Self {
+    fn new(shift_action: SF, reduce_action: RF) -> Self {
         Self {
             stack: Vec::new(),
             op_stack: Vec::new(),
@@ -76,19 +82,22 @@ where
             escaped: false,
             insert_concat: false,
 
-            parser_action,
+            shift_action,
+            reduce_action,
         }
     }
 
-    fn handle_literal_char(&mut self, c: char) -> Result<(), ParseError> {
+    fn handle_literal_char(&mut self, c: char) -> Result<()> {
         while self.precedence_reduce_stack(&Operator::Concatenation)? {}
 
         if self.insert_concat {
             self.push_operator(Operator::Concatenation);
         }
 
-        let new = (self.parser_action)(self, );
-        self.stack.
+        self.shift_action(c)?;
+        self.insert_concat = true;
+
+        Ok(())
     }
 
     fn handle_alter(&mut self) {
@@ -120,7 +129,7 @@ where
         self.insert_concat = false;
     }
 
-    fn handle_right_paren(&mut self) -> Result<(), ParseError> {
+    fn handle_right_paren(&mut self) -> Result<()> {
         let last_op = self
             .op_stack
             .last()
@@ -145,9 +154,44 @@ where
         Ok(())
     }
 
-    fn reduce_stack(&mut self) {}
+    fn reduce_stack(&mut self) -> Result<()> {
+        self.reduce_action()
+    }
 
-    fn precedence_reduce_stack(&mut self, op: &Operator) -> Result<bool, ParseError> {}
+    fn precedence_reduce_stack(&mut self, op: &Operator) -> Result<bool> {
+        let reduce = match self.op_stack.last() {
+            Some(last_op) => {
+                if last_op == op && *last_op != Operator::LeftParen {
+                    // If current op is the same as last, collapse the last.
+                    // If both of left parenthesis, do nothing
+                    true
+                } else if *op == Operator::Union {
+                    // If current op is alternation, collapse last if it is kleene or concat.
+                    *last_op == Operator::KleeneStar || *last_op == Operator::Concatenation
+                } else if *op == Operator::Concatenation {
+                    // If current op is concat, collapse last if it is kleene star.
+                    *last_op == Operator::KleeneStar
+                } else if *op == Operator::KleeneStar {
+                    // If current op is kleene star, do not collapse last because kleene star is
+                    // highest precedence.
+                    false
+                } else if *op == Operator::LeftParen {
+                    // If current op is left parenthesis, collapse last if it is kleene star.
+                    // KleeneStar star operates only on left node.
+                    *last_op == Operator::KleeneStar || *last_op == Operator::Concatenation
+                } else {
+                    false
+                }
+            }
+            None => false,
+        };
+
+        if reduce {
+            self.reduce_stack()?;
+        }
+
+        Ok(reduce)
+    }
 
     fn push_operator(&mut self, op: Operator) {
         self.op_stack.push(op);
@@ -155,6 +199,14 @@ where
 
     fn push_concatenation(&mut self) {
         self.op_stack.push(Operator::Concatenation);
+    }
+
+    fn shift_action(&mut self, c: char) -> Result<()> {
+        (self.shift_action)(&mut self.stack, &mut self.op_stack, c)
+    }
+
+    fn reduce_action(&mut self) -> Result<()> {
+        (self.reduce_action)(&mut self.stack, &mut self.op_stack)
     }
 }
 
