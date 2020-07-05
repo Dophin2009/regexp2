@@ -139,6 +139,24 @@ where
         new_nfa
     }
 
+    /// Construct a new NFA with epsilon transitions from the initial state to the initial states
+    /// of each child. The final states of the new NFA are the final states of the children.
+    pub fn combine(cc: &Vec<&NFA<T>>) -> NFA<T> {
+        let mut new_nfa = NFA::new();
+        let mut offset = new_nfa.total_states;
+        for c in cc {
+            NFA::copy_into(&mut new_nfa, c);
+            new_nfa.add_epsilon_transition(new_nfa.initial_state, c.initial_state + offset);
+
+            for c_final in c.final_states {
+                new_nfa.final_states.insert(c_final + offset);
+            }
+            offset += c.total_states;
+        }
+
+        new_nfa
+    }
+
     /// Add a state to the NFA. The label of the state is returned. The total number of states is
     /// always greater than the label of the newest state by 1.
     pub fn add_state(&mut self, is_final: bool) -> u32 {
@@ -374,5 +392,15 @@ mod tests {
         let kleene = NFA::kleene_star(&c1);
         assert_eq!(4, kleene.total_states);
         assert_eq!(1, kleene.final_states.len());
+    }
+
+    #[test]
+    fn test_combine() {
+        let cc: Vec<&NFA<bool>> = vec![&NFA::new_epsilon(), &NFA::new_epsilon()];
+        let combined = NFA::combine(&cc);
+
+        assert_eq!(0, combined.initial_state);
+        assert_eq!(5, combined.total_states);
+        assert_eq!(2, combined.final_states.len());
     }
 }
