@@ -166,6 +166,39 @@ fn test_composite() {
 }
 
 #[test]
+fn test_char_class() {
+    let exprs = ["[abc]"];
+    let valids = ["a", "b", "c"];
+    let invalids = ["", "d", "ab", "bc", "ac"];
+    run_tests!(&exprs, &valids, &invalids);
+
+    let exprs = ["[a-c]"];
+    let valids = ["a", "b", "c"];
+    let invalids = ["", "d", "ab", "bc", "ac"];
+    run_tests!(&exprs, &valids, &invalids);
+
+    let exprs = ["[a-bd-e]"];
+    let valids = ["a", "b", "d", "e"];
+    let invalids = ["", "c", "f", "ab", "bc", "ac"];
+    run_tests!(&exprs, &valids, &invalids);
+
+    let exprs = ["[a-bd-e]*"];
+    let valids = ["", "a", "b", "d", "e", "aa", "ba", "ae", "abde", "eabd"];
+    let invalids = [" ", "c", "f", "z", "ac", "addc"];
+    run_tests!(&exprs, &valids, &invalids);
+
+    let exprs = ["[ab]b"];
+    let valids = ["ab", "bb"];
+    let invalids = ["", " ", "a", "b", "aa", "cb"];
+    run_tests!(&exprs, &valids, &invalids);
+
+    let exprs = ["[a]]"];
+    let valids = ["a]"];
+    let invalids = ["", " ", "a", "]", "[a]", "[a]]", "b]"];
+    run_tests!(&exprs, &valids, &invalids);
+}
+
+#[test]
 fn test_malformed() {
     let exprs = [
         "(", ")", "a(", "(()", "*", "|", "*a", "**", "a|", "a)*", "(ab",

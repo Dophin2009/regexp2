@@ -11,7 +11,17 @@ pub struct CharClass {
 }
 
 impl CharClass {
-    pub fn new(ranges: Vec<CharRange>) -> Self {
+    pub fn new() -> Self {
+        CharClass { ranges: Vec::new() }
+    }
+
+    pub fn new_range(range: CharRange) -> Self {
+        CharClass {
+            ranges: vec![range],
+        }
+    }
+
+    pub fn new_ranges(ranges: Vec<CharRange>) -> Self {
         CharClass { ranges }
     }
 
@@ -77,20 +87,131 @@ where
             |stack, op_stack| self.reduce_action(stack, op_stack),
         );
 
-        for c in expr.chars() {
-            if state.escaped {
-                state.escaped = false;
-                state.handle_literal_char(c)?;
-            } else {
-                match c {
-                    '\\' => state.escaped = true,
-                    '|' => state.handle_alter()?,
-                    '*' => state.handle_kleene_star()?,
-                    '(' => state.handle_left_paren()?,
-                    ')' => state.handle_right_paren()?,
-                    _ => state.handle_literal_char(c)?,
+        let mut chars = expr.chars();
+        let mut next = chars.next();
+        while next.is_some() {
+            let c = next.unwrap();
+
+            match c {
+                '|' => {
+                    if state.escaped {
+                        // If escaped, handle this as literal |
+                        state.escaped = false;
+                        state.handle_literal_char(c)?;
+                    } else {
+                        // If not escaped, handle this as union operator
+                        state.handle_union()?;
+                    }
+                }
+                '*' => {
+                    if state.escaped {
+                        // If escaped, handle this as literal |
+                        state.escaped = false;
+                        state.handle_literal_char(c)?;
+                    } else {
+                        // If not escaped, handle this as kleene star operator
+                        state.handle_kleene_star()?;
+                    }
+                }
+                '(' => {
+                    if state.escaped {
+                        // If escaped, handle this as literal |
+                        state.escaped = false;
+                        state.handle_literal_char(c)?;
+                    } else {
+                        // If not escaped, handle this as left parentheses
+                        state.handle_left_paren()?;
+                    }
+                }
+                ')' => {
+                    if state.escaped {
+                        // If escaped, handle this as literal |
+                        state.escaped = false;
+                        state.handle_literal_char(c)?;
+                    } else {
+                        // If not escaped, handle this as left parentheses
+                        state.handle_right_paren()?;
+                    }
+                }
+                '[' => {
+                    if state.in_char_class {
+                        // Set [ in char class if currently within brackets.
+                        state.append_char_range_buf(c);
+                    } else if state.escaped {
+                        // Handle [ as literal if escaped and not in char class.
+                        state.escaped = false;
+                        state.handle_literal_char(c)?;
+                    } else {
+                        // Enter char class until ] is seen if not currently in char class or
+                        // escaped.
+                        state.in_char_class = true;
+                        state.char_class_buf = CharClass::new();
+                    }
+                }
+                ']' => {
+                    if state.escaped {
+                        state.escaped = false;
+                        if state.in_char_class {
+                            // Handle ] as part in char class if escaped and in char class.
+                            state.append_char_range_buf(c);
+                        } else {
+                            // Handle ] as literal if escaped and not in char class.
+                            state.handle_literal_char(c)?;
+                        }
+                    } else if state.in_char_class {
+                        // End char class if not escaped and in char class.
+                        state.in_char_class = false;
+
+                        // Existing chars in first and second spots of buffer are added to
+                        // char class as single-char ranges.
+                        let s0 = state.char_range_buf.0;
+                        if let Some(s) = s0 {
+                            state.char_class_buf.add_range(CharRange::new_single(s));
+                            let s1 = state.char_range_buf.1;
+                            if let Some(s) = s1 {
+                                state.char_class_buf.add_range(CharRange::new_single(s));
+                            }
+                        }
+
+                        // Throw error if nothing specified between brackets.
+                        if state.char_class_buf.ranges.is_empty() {
+                            return Err(ParseError::EmptyCharacterClass);
+                        }
+
+                        // Clear the char range buffer.
+                        state.char_range_buf.clear();
+
+                        // Call shift action on completed char class.
+                        let char_class = state.char_class_buf.clone();
+                        state.handle_char_class(char_class)?;
+
+                        // Clear the char class buffer.
+                        state.char_class_buf = CharClass::new();
+                    } else {
+                        // Handle ] as literal if not escaped or in char class.
+                        state.handle_literal_char(c)?;
+                    }
+                }
+                '\\' => {
+                    if state.escaped {
+                        // If escaped, handle this as literal \
+                        state.escaped = false;
+                        state.handle_literal_char(c)?;
+                    } else {
+                        // If unescaped and not in char class, handle next
+                        state.escaped = true;
+                    }
+                }
+                _ => {
+                    if state.in_char_class {
+                        state.append_char_range_buf(c);
+                    } else {
+                        state.handle_literal_char(c)?
+                    }
                 }
             }
+
+            next = chars.next();
         }
 
         if expr.len() == 0 {
@@ -119,8 +240,27 @@ where
     escaped: bool,
     insert_concat: bool,
 
+    in_char_class: bool,
+    char_class_buf: CharClass,
+    char_range_buf: CharRangeBuf,
+
     shift_action: SF,
     reduce_action: RF,
+}
+
+#[derive(Debug)]
+struct CharRangeBuf(Option<char>, Option<char>, Option<char>);
+
+impl CharRangeBuf {
+    fn new() -> Self {
+        CharRangeBuf(None, None, None)
+    }
+
+    fn clear(&mut self) {
+        self.0 = None;
+        self.1 = None;
+        self.2 = None;
+    }
 }
 
 impl<T, SF, RF> ParserState<T, SF, RF>
@@ -137,26 +277,34 @@ where
             escaped: false,
             insert_concat: false,
 
+            in_char_class: false,
+            char_class_buf: CharClass::new(),
+            char_range_buf: CharRangeBuf::new(),
+
             shift_action,
             reduce_action,
         }
     }
 
     fn handle_literal_char(&mut self, c: char) -> Result<()> {
+        let char_class = CharClass::new_single(c);
+        self.handle_char_class(char_class)
+    }
+
+    fn handle_char_class(&mut self, c: CharClass) -> Result<()> {
         while self.precedence_reduce_stack(&Operator::Concatenation)? {}
 
         if self.insert_concat {
             self.push_operator(Operator::Concatenation);
         }
 
-        let char_class = CharClass::new_single(c);
-        self.shift_action(char_class)?;
+        self.shift_action(c)?;
         self.insert_concat = true;
 
         Ok(())
     }
 
-    fn handle_alter(&mut self) -> Result<()> {
+    fn handle_union(&mut self) -> Result<()> {
         let op = Operator::Union;
         self.precedence_reduce_stack(&op)?;
 
@@ -178,7 +326,7 @@ where
 
     fn handle_left_paren(&mut self) -> Result<()> {
         let op = Operator::LeftParen;
-        self.precedence_reduce_stack(&op);
+        self.precedence_reduce_stack(&op)?;
 
         if self.insert_concat {
             self.push_concatenation();
@@ -216,6 +364,42 @@ where
         self.insert_concat = true;
 
         Ok(())
+    }
+
+    /// This method should only be called when in_char_class is true.
+    /// The escaping of character class metasymbols (]) should be handled outside of this method
+    /// call.
+    fn append_char_range_buf(&mut self, c: char) {
+        if self.char_range_buf.0 == None {
+            // If first spot is empty, add this char as the start of the range.
+            self.char_range_buf.0 = Some(c);
+        } else if self.char_range_buf.1 == None {
+            if c == '-' {
+                // If second spot is empty and this char is a dash, fill second spot.
+                self.char_range_buf.1 = Some(c);
+            } else {
+                // If second spot is empty but this char is not a dash, add a single-char range to
+                // the char class buffer.
+                let new_range_char = self.char_range_buf.0.unwrap();
+                let new_range = CharRange::new_single(new_range_char);
+                self.char_class_buf.add_range(new_range);
+
+                // Clear the range buffer.
+                self.char_range_buf.clear();
+
+                // Retry appending this char.
+                self.append_char_range_buf(c);
+            }
+        } else if self.char_range_buf.2 == None {
+            // If third spot is empty, complete the range and add it to the char class buffer.
+            let start = self.char_range_buf.0.unwrap();
+            let end = c;
+            let new_range = CharRange::new(start, end);
+            self.char_class_buf.add_range(new_range);
+
+            self.char_range_buf.clear();
+        }
+        // There should never be a situation where all spots are filled.
     }
 
     fn reduce_stack(&mut self) -> Result<()> {
@@ -278,6 +462,7 @@ where
 pub enum ParseError {
     UnbalancedOperators,
     UnbalancedParentheses,
+    EmptyCharacterClass,
 }
 
 impl fmt::Display for ParseError {
@@ -285,6 +470,7 @@ impl fmt::Display for ParseError {
         match *self {
             Self::UnbalancedOperators => write!(f, "unbalanced operators"),
             Self::UnbalancedParentheses => write!(f, "unbalanced parentheses"),
+            Self::EmptyCharacterClass => write!(f, "empty character class"),
         }
     }
 }
