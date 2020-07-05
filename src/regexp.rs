@@ -3,10 +3,9 @@ pub struct RegExp {
 }
 
 impl RegExp {
-    pub fn new_nfa(expr: &str) -> Self {
-        let regexp = RegExp {
+    pub fn new_with_nfa(expr: &str) -> Self {
+        RegExp {
             expr: expr.to_owned(),
-        };
-        regexp
+        }
     }
 }

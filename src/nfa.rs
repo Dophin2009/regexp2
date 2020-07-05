@@ -10,21 +10,32 @@ pub struct NFA<T: Clone + Eq + Hash> {
     initial_state: u32,
     total_states: u32,
     final_states: HashSet<u32>,
-    transition: Table<u32, Transition<T>, Vec<u32>>,
+    transition: Table<u32, Transition<T>, HashSet<u32>>,
 }
 
-// macro_rules! hash_set {
-// () => {
-// HashSet::new()
-// };
-// ( $( $x:expr ),* ) => {{
-// let mut set = HashSet::new();
-// $(set.insert($x);)*
-// set
-// }};
-// }
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum Transition<T: Clone + Eq + Hash> {
+    Some(T),
+    Epsilon,
+}
 
-impl<T: Clone + Eq + Hash> NFA<T> {
+macro_rules! hash_set {
+    () => {
+        HashSet::new()
+    };
+    ( $( $x:expr ),* ) => {{
+        let mut set = HashSet::new();
+        $(
+            set.insert($x);
+        )*
+        set
+    }};
+}
+
+impl<T> NFA<T>
+where
+    T: Clone + Eq + Hash,
+{
     /// Create a new NFA with a single initial state.
     pub fn new() -> Self {
         NFA {
@@ -148,8 +159,9 @@ impl<T: Clone + Eq + Hash> NFA<T> {
         if self.total_states < start + 1 || self.total_states < end + 1 {
             None
         } else {
-            self.transition
-                .set_or(start, label, vec![end], |v| v.push(end));
+            self.transition.set_or(start, label, hash_set![end], |v| {
+                v.insert(end);
+            });
             Some(())
         }
     }
@@ -160,6 +172,19 @@ impl<T: Clone + Eq + Hash> NFA<T> {
 
     pub fn add_epsilon_transition(&mut self, start: u32, end: u32) -> Option<()> {
         self.add_transition(start, end, Transition::Epsilon)
+    }
+
+    pub fn epsilon_closure(&self, state: u32) -> HashSet<u32> {
+        let transitions = self.transitions_from(state);
+        transitions
+            .into_iter()
+            .filter(|(&t, _)| t == Transition::Epsilon)
+            .flat_map(|(_, dest)| dest.into_iter().map(|&i| i))
+            .collect()
+    }
+
+    pub fn transitions_from(&self, state: u32) -> HashMap<&Transition<T>, &HashSet<u32>> {
+        self.transition.get_row(&state)
     }
 }
 
@@ -174,10 +199,78 @@ impl<T: Clone + Eq + Hash> Clone for NFA<T> {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub enum Transition<T: Clone + Eq + Hash> {
-    Some(T),
-    Epsilon,
+impl<T> NFA<T>
+where
+    T: Clone + Eq + Hash,
+{
+    pub fn iter_input<'a, S, I>(&'a self, input: I) -> NFAIterator<'a, T, S, I>
+    where
+        T: PartialEq<S>,
+        I: Iterator<Item = S>,
+    {
+        NFAIterator::new(self, input)
+    }
+
+    pub fn is_exact_match<'a, S, I>(&self, input: I) -> bool
+    where
+        T: PartialEq<S>,
+        I: Iterator<Item = S>,
+    {
+        let iter = self.iter_input(input);
+        let final_set = iter.last();
+        match final_set {
+            Some(set) => set.iter().any(|s| self.final_states.contains(s)),
+            None => false,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct NFAIterator<'a, T, S, I>
+where
+    T: Clone + Eq + Hash + PartialEq<S>,
+    I: Iterator<Item = S>,
+{
+    input: I,
+    state_set: HashSet<u32>,
+    nfa: &'a NFA<T>,
+}
+
+impl<'a, T, S, I> Iterator for NFAIterator<'a, T, S, I>
+where
+    T: Clone + Eq + Hash + PartialEq<S>,
+    I: Iterator<Item = S>,
+{
+    type Item = HashSet<u32>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let c = self.input.next();
+        self.state_set = self.epsilon_closure_set(&self.state_set);
+        Some(self.state_set)
+    }
+}
+
+impl<'a, T, S, I> NFAIterator<'a, T, S, I>
+where
+    T: Clone + Eq + Hash + PartialEq<S>,
+    I: Iterator<Item = S>,
+{
+    fn new(nfa: &'a NFA<T>, input: I) -> Self {
+        NFAIterator {
+            input,
+            state_set: nfa.epsilon_closure(nfa.initial_state),
+            nfa,
+        }
+    }
+
+    fn epsilon_closure_set(&self, state_set: &HashSet<u32>) -> HashSet<u32> {
+        let set = HashSet::new();
+        for state in state_set.iter() {
+            let state_closure = self.nfa.epsilon_closure(*state);
+            set = set.union(&state_closure).map(|&i| i).collect();
+        }
+        set
+    }
 }
 
 #[cfg(test)]

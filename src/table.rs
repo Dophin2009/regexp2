@@ -58,6 +58,27 @@ where
             None => None,
         }
     }
+
+    pub fn get_row(&self, row: &T) -> HashMap<&U, &V> {
+        let row_map = match self.map.get(row) {
+            Some(m) => m,
+            None => return HashMap::new(),
+        };
+
+        row_map.iter().collect()
+    }
+
+    pub fn get_col(&self, col: &U) -> HashMap<&T, &V> {
+        let result = HashMap::new();
+        for (row, column_map) in self.map.iter() {
+            for (column_key, val) in column_map.iter() {
+                if *column_key == *col {
+                    result.insert(row, val);
+                }
+            }
+        }
+        result
+    }
 }
 
 impl<T, U, V> Clone for Table<T, U, V>
