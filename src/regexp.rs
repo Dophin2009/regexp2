@@ -8,12 +8,12 @@ use std::marker::PhantomData;
 // use regex_syntax::utf8::{Utf8Sequence, Utf8Sequences};
 
 #[derive(Debug)]
-pub struct RegExp<B: RegExpBackend> {
+pub struct RegExp<E: Engine> {
     expr: String,
-    engine: B,
+    engine: E,
 }
 
-impl<B: RegExpBackend> RegExp<B> {
+impl<E: Engine> RegExp<E> {
     pub fn is_exact_match(&self, input: &str) -> bool {
         self.engine.is_exact_match(input)
     }
@@ -31,11 +31,11 @@ impl RegExp<NFA<char>> {
     }
 }
 
-pub trait RegExpBackend {
+pub trait Engine {
     fn is_exact_match(&self, input: &str) -> bool;
 }
 
-impl RegExpBackend for NFA<char> {
+impl Engine for NFA<char> {
     fn is_exact_match(&self, input: &str) -> bool {
         self.is_exact_match(input.chars())
     }
