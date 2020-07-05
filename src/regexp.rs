@@ -1,4 +1,5 @@
 use crate::nfa::{Transition, NFA};
+use crate::parser::CharClass;
 use crate::parser::{self, Operator, ParseError, Parser};
 use std::hash::Hash;
 use std::marker::PhantomData;
@@ -6,6 +7,36 @@ use std::marker::PhantomData;
 // Use the regex-syntax crate to convert ranges of Unicode scalar values to equivalent sets of
 // ranges of Unicode codepoints.
 // use regex_syntax::utf8::{Utf8Sequence, Utf8Sequences};
+
+impl RegExp<NFA<CharClass>> {
+    pub fn new_with_nfa(expr: &str) -> parser::Result<Self> {
+        let parser = NFAParser::new();
+        let nfa: NFA<CharClass> = parser.parse(expr)?.unwrap();
+
+        Ok(RegExp {
+            expr: expr.to_owned(),
+            engine: nfa,
+        })
+    }
+}
+
+impl Engine for NFA<CharClass> {
+    fn is_exact_match(&self, input: &str) -> bool {
+        self.is_exact_match(input.chars())
+    }
+}
+
+impl PartialEq<char> for CharClass {
+    fn eq(&self, other: &char) -> bool {
+        self.contains(*other)
+    }
+}
+
+impl From<CharClass> for Transition<CharClass> {
+    fn from(c: CharClass) -> Self {
+        Transition::Some(c)
+    }
+}
 
 #[derive(Debug)]
 pub struct RegExp<E: Engine> {
@@ -19,38 +50,14 @@ impl<E: Engine> RegExp<E> {
     }
 }
 
-impl RegExp<NFA<char>> {
-    pub fn new_with_nfa(expr: &str) -> parser::Result<Self> {
-        let parser = NFAParser::new();
-        let nfa: NFA<char> = parser.parse(expr)?.unwrap();
-
-        Ok(RegExp {
-            expr: expr.to_owned(),
-            engine: nfa,
-        })
-    }
-}
-
 pub trait Engine {
     fn is_exact_match(&self, input: &str) -> bool;
-}
-
-impl Engine for NFA<char> {
-    fn is_exact_match(&self, input: &str) -> bool {
-        self.is_exact_match(input.chars())
-    }
-}
-
-impl From<char> for Transition<char> {
-    fn from(c: char) -> Self {
-        Transition::Some(c)
-    }
 }
 
 pub struct NFAParser<T>
 where
     T: Clone + Eq + Hash,
-    Transition<T>: From<char>,
+    Transition<T>: From<CharClass>,
 {
     _phantom: PhantomData<T>,
 }
@@ -58,7 +65,7 @@ where
 impl<T> NFAParser<T>
 where
     T: Clone + Eq + Hash,
-    Transition<T>: From<char>,
+    Transition<T>: From<CharClass>,
 {
     pub fn new() -> Self {
         NFAParser {
@@ -70,13 +77,13 @@ where
 impl<T> Parser<NFA<T>> for NFAParser<T>
 where
     T: Clone + Eq + Hash,
-    Transition<T>: From<char>,
+    Transition<T>: From<CharClass>,
 {
     fn shift_action(
         &self,
         stack: &mut Vec<NFA<T>>,
         _: &mut Vec<Operator>,
-        c: char,
+        c: CharClass,
     ) -> parser::Result<()> {
         let transition = c.into();
 

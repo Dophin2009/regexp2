@@ -1,3 +1,4 @@
+use crate::hash_set;
 use crate::table::Table;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
@@ -14,19 +15,6 @@ pub struct NFA<T: Clone + Eq + Hash> {
 pub enum Transition<T: Clone + Eq + Hash> {
     Some(T),
     Epsilon,
-}
-
-macro_rules! hash_set {
-    () => {
-        HashSet::new()
-    };
-    ( $( $x:expr ),* ) => {{
-        let mut set = HashSet::new();
-        $(
-            set.insert($x);
-        )*
-        set
-    }};
 }
 
 impl<T> NFA<T>
@@ -148,7 +136,7 @@ where
             NFA::copy_into(&mut new_nfa, c);
             new_nfa.add_epsilon_transition(new_nfa.initial_state, c.initial_state + offset);
 
-            for c_final in c.final_states {
+            for c_final in c.final_states.iter() {
                 new_nfa.final_states.insert(c_final + offset);
             }
             offset += c.total_states;
@@ -396,7 +384,9 @@ mod tests {
 
     #[test]
     fn test_combine() {
-        let cc: Vec<&NFA<bool>> = vec![&NFA::new_epsilon(), &NFA::new_epsilon()];
+        let c1 = NFA::new_epsilon();
+        let c2 = NFA::new_epsilon();
+        let cc: Vec<&NFA<bool>> = vec![&c1, &c2];
         let combined = NFA::combine(&cc);
 
         assert_eq!(0, combined.initial_state);

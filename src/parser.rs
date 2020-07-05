@@ -1,8 +1,53 @@
 use std::error;
 use std::fmt;
+use std::hash::Hash;
 use std::result;
 
 pub type Result<T> = result::Result<T, ParseError>;
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct CharClass {
+    ranges: Vec<CharRange>,
+}
+
+impl CharClass {
+    pub fn new(ranges: Vec<CharRange>) -> Self {
+        CharClass { ranges }
+    }
+
+    pub fn new_single(c: char) -> Self {
+        CharClass {
+            ranges: vec![CharRange::new_single(c)],
+        }
+    }
+
+    pub fn contains(&self, c: char) -> bool {
+        self.ranges.iter().any(|r| r.contains(c))
+    }
+
+    pub fn add_range(&mut self, range: CharRange) {
+        self.ranges.push(range);
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct CharRange {
+    start: char,
+    end: char,
+}
+
+impl CharRange {
+    pub fn new(start: char, end: char) -> Self {
+        CharRange { start, end }
+    }
+    pub fn new_single(c: char) -> Self {
+        CharRange { start: c, end: c }
+    }
+
+    pub fn contains(&self, c: char) -> bool {
+        self.start <= c && c <= self.end
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub enum Operator {
@@ -17,8 +62,12 @@ pub trait Parser<T>
 where
     T: Clone,
 {
-    fn shift_action(&self, stack: &mut Vec<T>, op_stack: &mut Vec<Operator>, c: char)
-        -> Result<()>;
+    fn shift_action(
+        &self,
+        stack: &mut Vec<T>,
+        op_stack: &mut Vec<Operator>,
+        c: CharClass,
+    ) -> Result<()>;
 
     fn reduce_action(&self, stack: &mut Vec<T>, op_stack: &mut Vec<Operator>) -> Result<()>;
 
@@ -60,7 +109,7 @@ where
 #[derive(Debug)]
 struct ParserState<T, SF, RF>
 where
-    SF: Copy + FnMut(&mut Vec<T>, &mut Vec<Operator>, char) -> Result<()>,
+    SF: Copy + FnMut(&mut Vec<T>, &mut Vec<Operator>, CharClass) -> Result<()>,
     RF: Copy + FnMut(&mut Vec<T>, &mut Vec<Operator>) -> Result<()>,
 {
     stack: Vec<T>,
@@ -76,7 +125,7 @@ where
 
 impl<T, SF, RF> ParserState<T, SF, RF>
 where
-    SF: Copy + FnMut(&mut Vec<T>, &mut Vec<Operator>, char) -> Result<()>,
+    SF: Copy + FnMut(&mut Vec<T>, &mut Vec<Operator>, CharClass) -> Result<()>,
     RF: Copy + FnMut(&mut Vec<T>, &mut Vec<Operator>) -> Result<()>,
 {
     fn new(shift_action: SF, reduce_action: RF) -> Self {
@@ -100,7 +149,8 @@ where
             self.push_operator(Operator::Concatenation);
         }
 
-        self.shift_action(c)?;
+        let char_class = CharClass::new_single(c);
+        self.shift_action(char_class)?;
         self.insert_concat = true;
 
         Ok(())
@@ -215,7 +265,7 @@ where
         self.op_stack.push(Operator::Concatenation);
     }
 
-    fn shift_action(&mut self, c: char) -> Result<()> {
+    fn shift_action(&mut self, c: CharClass) -> Result<()> {
         (self.shift_action)(&mut self.stack, &mut self.op_stack, c)
     }
 

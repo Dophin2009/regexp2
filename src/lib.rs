@@ -1,6 +1,7 @@
 mod parser;
 mod regexp;
 mod table;
+mod util;
 
 #[cfg(test)]
 mod tests;
