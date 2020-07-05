@@ -1,7 +1,8 @@
 use std::error;
 use std::fmt;
+use std::result;
 
-pub type Result<T> = std::result::Result<T, ParseError>;
+pub type Result<T> = result::Result<T, ParseError>;
 
 #[derive(Debug, PartialEq)]
 pub enum Operator {
@@ -9,6 +10,7 @@ pub enum Operator {
     Concatenation,
     KleeneStar,
     LeftParen,
+    EmptyPlaceholder,
 }
 
 pub trait Parser<T>
@@ -29,13 +31,13 @@ where
         for c in expr.chars() {
             if state.escaped {
                 state.escaped = false;
-                state.handle_literal_char(c);
+                state.handle_literal_char(c)?;
             } else {
                 match c {
                     '\\' => state.escaped = true,
-                    '|' => state.handle_alter(),
-                    '*' => state.handle_kleene_star(),
-                    '(' => state.handle_left_paren(),
+                    '|' => state.handle_alter()?,
+                    '*' => state.handle_kleene_star()?,
+                    '(' => state.handle_left_paren()?,
                     ')' => state.handle_right_paren()?,
                     _ => state.handle_literal_char(c)?,
                 }
@@ -100,23 +102,27 @@ where
         Ok(())
     }
 
-    fn handle_alter(&mut self) {
+    fn handle_alter(&mut self) -> Result<()> {
         let op = Operator::Union;
-        self.precedence_reduce_stack(&op);
+        self.precedence_reduce_stack(&op)?;
 
         self.op_stack.push(op);
         self.insert_concat = false;
+
+        Ok(())
     }
 
-    fn handle_kleene_star(&mut self) {
+    fn handle_kleene_star(&mut self) -> Result<()> {
         let op = Operator::KleeneStar;
-        self.precedence_reduce_stack(&op);
+        self.precedence_reduce_stack(&op)?;
 
         self.op_stack.push(op);
         self.insert_concat = true;
+
+        Ok(())
     }
 
-    fn handle_left_paren(&mut self) {
+    fn handle_left_paren(&mut self) -> Result<()> {
         let op = Operator::LeftParen;
         self.precedence_reduce_stack(&op);
 
@@ -127,6 +133,8 @@ where
         self.op_stack.push(op);
         self.paren_count_stack.push(self.stack.len());
         self.insert_concat = false;
+
+        Ok(())
     }
 
     fn handle_right_paren(&mut self) -> Result<()> {
@@ -138,9 +146,11 @@ where
             .paren_count_stack
             .last()
             .ok_or(ParseError::UnbalancedParentheses)?;
+
         if *last_op == Operator::LeftParen && *prev_node_count == self.stack.len() {
             self.op_stack.pop().ok_or(ParseError::UnbalancedOperators)?;
-        // self.stack.push()
+            self.op_stack.push(Operator::EmptyPlaceholder);
+            self.reduce_stack()?;
         } else {
             while !self.op_stack.is_empty() && *self.op_stack.last().unwrap() != Operator::LeftParen
             {

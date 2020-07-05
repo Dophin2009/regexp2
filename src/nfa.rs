@@ -1,18 +1,13 @@
-use crate::parser::{self, Operator, ParseError, Parser};
 use crate::table::Table;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
-use std::marker::PhantomData;
 
-// Use the regex-syntax crate to convert ranges of Unicode scalar values to equivalent sets of
-// ranges of Unicode codepoints.
-// use regex_syntax::utf8::{Utf8Sequence, Utf8Sequences};
 #[derive(Debug)]
 pub struct NFA<T: Clone + Eq + Hash> {
-    initial_state: u32,
-    total_states: u32,
-    final_states: HashSet<u32>,
-    transition: Table<u32, Transition<T>, HashSet<u32>>,
+    pub initial_state: u32,
+    pub total_states: u32,
+    pub final_states: HashSet<u32>,
+    pub transition: Table<u32, Transition<T>, HashSet<u32>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -178,11 +173,13 @@ where
 
     pub fn epsilon_closure(&self, state: u32) -> HashSet<u32> {
         let transitions = self.transitions_from(state);
-        transitions
+        let mut closure: HashSet<_> = transitions
             .into_iter()
             .filter(|(t, _)| **t == Transition::Epsilon)
-            .flat_map(|(_, dest)| dest.into_iter().map(|&i| i))
-            .collect()
+            .flat_map(|(_, dest)| dest.into_iter().flat_map(|&i| self.epsilon_closure(i)))
+            .collect();
+        closure.insert(state);
+        closure
     }
 
     pub fn transitions_from(&self, state: u32) -> HashMap<&Transition<T>, &HashSet<u32>> {
@@ -236,6 +233,8 @@ where
     input: I,
     state_set: HashSet<u32>,
     nfa: &'a NFA<T>,
+
+    iter_c: u32,
 }
 
 impl<'a, T, S, I> Iterator for NFAIterator<'a, T, S, I>
@@ -246,6 +245,11 @@ where
     type Item = HashSet<u32>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        self.iter_c += 1;
+        if self.iter_c == 1 {
+            return Some(self.state_set.clone());
+        }
+
         let c = match self.input.next() {
             Some(c) => c,
             None => return None,
@@ -253,6 +257,7 @@ where
 
         let moved_set = self.move_set(&self.state_set, &c);
         self.state_set = self.epsilon_closure_set(&moved_set);
+
         Some(self.state_set.clone())
     }
 }
@@ -267,11 +272,12 @@ where
             input,
             state_set: nfa.epsilon_closure(nfa.initial_state),
             nfa,
+            iter_c: 0,
         }
     }
 
     fn epsilon_closure_set(&self, state_set: &HashSet<u32>) -> HashSet<u32> {
-        let mut set = HashSet::new();
+        let mut set = state_set.clone();
         for state in state_set.iter() {
             let state_closure = self.nfa.epsilon_closure(*state);
             set = set.union(&state_closure).map(|&i| i).collect();
@@ -294,60 +300,6 @@ where
             set = set.union(&input_transitions).map(|&i| i).collect();
         }
         set
-    }
-}
-
-pub trait NFAParser<T>: Parser<NFA<T>>
-where
-    T: Clone + Eq + Hash,
-{
-    fn make_transition(&self, c: char) -> Transition<T>;
-
-    fn shift_action(
-        &self,
-        stack: &mut Vec<NFA<T>>,
-        _: &mut Vec<Operator>,
-        c: char,
-    ) -> parser::Result<()> {
-        let transition = self.make_transition(c);
-
-        let mut nfa = NFA::new();
-        let final_state = nfa.add_state(true);
-        nfa.add_transition(nfa.initial_state, final_state, transition);
-
-        stack.push(nfa);
-
-        Ok(())
-    }
-
-    fn reduce_action(
-        &self,
-        stack: &mut Vec<NFA<T>>,
-        op_stack: &mut Vec<Operator>,
-    ) -> parser::Result<()> {
-        let op = op_stack.pop().ok_or(ParseError::UnbalancedOperators)?;
-        let new_nfa: NFA<T>;
-
-        match op {
-            Operator::Union => {
-                let c2 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
-                let c1 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
-                new_nfa = NFA::union(&c1, &c2);
-            }
-            Operator::Concatenation => {
-                let c2 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
-                let c1 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
-                new_nfa = NFA::concatenation(&c1, &c2);
-            }
-            Operator::KleeneStar => {
-                let c1 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
-                new_nfa = NFA::kleene_star(&c1);
-            }
-            _ => return Err(ParseError::UnbalancedParentheses),
-        }
-
-        stack.push(new_nfa);
-        Ok(())
     }
 }
 
