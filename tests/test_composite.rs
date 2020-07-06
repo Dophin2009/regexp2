@@ -33,4 +33,9 @@ fn test_composite() {
     let valids = ["ababb", "abaabb", "abbabb", "abababb", "abbaabb"];
     let invalids = ["", "ab", "abab", "abb"];
     run_tests!(&exprs, &valids, &invalids);
+
+    let exprs = [r"\d+\w?"];
+    let valids = ["1", "3a", "08m", "046b", "999_"];
+    let invalids = ["", " ", "a", "55xy"];
+    run_tests!(&exprs, &valids, &invalids);
 }
