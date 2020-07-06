@@ -1,4 +1,5 @@
 use crate::class::CharClass;
+use crate::hash_set;
 use crate::nfa::{Transition, NFA};
 use crate::parser::{self, Operator, ParseError, Parser};
 use std::hash::Hash;
@@ -114,6 +115,16 @@ where
             Operator::KleeneStar => {
                 let c1 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
                 new_nfa = NFA::kleene_star(&c1);
+            }
+            Operator::Plus => {
+                let c1 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                let kleene = NFA::kleene_star(&c1);
+                new_nfa = NFA::concatenation(&kleene, &c1);
+            }
+            Operator::Optional => {
+                let c1 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                let c2 = NFA::new_epsilon();
+                new_nfa = NFA::union(&c1, &c2);
             }
             Operator::EmptyPlaceholder => {
                 new_nfa = NFA::new();

@@ -115,6 +115,52 @@ fn test_kleene() {
 }
 
 #[test]
+fn test_plus() {
+    let exprs = ["a+", "(a+)", "(a)+", "((a)+)", "aa*", "a*a"];
+    let valids = ["a", "aa", "aaa"];
+    let invalids = ["", " ", " a", "ab", "aaaab"];
+    run_tests!(&exprs, &valids, &invalids);
+
+    let exprs = ["ab+", "(ab+)", "(a)b+", "a(b+)", "a(b)+", "(a)(b)+", "abb*"];
+    let valids = ["ab", "abb", "abbb"];
+    let invalids = ["", "a", "b", "aba", " abb"];
+    run_tests!(&exprs, &valids, &invalids);
+
+    let exprs = ["a+b", "(a+b)", "(a+)b", "a+(b)", "(a+)(b)", "aa*b", "a*ab"];
+    let valids = ["ab", "aab", "aaab"];
+    let invalids = ["", "a", "b", "abb"];
+    run_tests!(&exprs, &valids, &invalids);
+
+    let exprs = ["(ab)+", "((ab)+)", "((a)(b))+", "ab(ab)*"];
+    let valids = ["ab", "abab", "ababab"];
+    let invalids = ["", " ", "a", "b", "aab", "abb"];
+    run_tests!(&exprs, &valids, &invalids);
+}
+
+#[test]
+fn test_optional() {
+    let exprs = ["a?", "(a?)", "(a)?", "((a)?)"];
+    let valids = ["", "a"];
+    let invalids = [" ", " a", "aa", "ab"];
+    run_tests!(&exprs, &valids, &invalids);
+
+    let exprs = ["ab?", "(ab?)", "(a)b?", "a(b?)", "a(b)?", "(a)(b)?"];
+    let valids = ["a", "ab"];
+    let invalids = ["", "b", "aba", "abb"];
+    run_tests!(&exprs, &valids, &invalids);
+
+    let exprs = ["a?b", "(a?b)", "(a?)b", "a?(b)", "(a?)(b)"];
+    let valids = ["b", "ab"];
+    let invalids = ["", "a", "aab", "abb"];
+    run_tests!(&exprs, &valids, &invalids);
+
+    let exprs = ["(ab)?", "((ab)?)", "((a)(b))?"];
+    let valids = ["", "ab"];
+    let invalids = [" ", "a", "b", "aab", "abb", "abab"];
+    run_tests!(&exprs, &valids, &invalids);
+}
+
+#[test]
 fn test_alternate() {
     let exprs = ["a|b", "(a|b)", "(a)|b", "a|(b)", "((a)|b)"];
     let valids = ["a", "b"];

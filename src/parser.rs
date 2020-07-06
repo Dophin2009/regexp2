@@ -32,29 +32,89 @@ where
             match c {
                 '|' => {
                     if state.escaped {
-                        // If escaped, handle this as literal |
                         state.escaped = false;
-                        state.handle_literal_char(c)?;
+                        if state.in_char_class {
+                            // If escaped and in char class, push to char range buffer.
+                            state.append_char_range_buf(c);
+                        } else {
+                            // If escaped and not in char class, handle this as literal |.
+                            state.handle_literal_char(c)?;
+                        }
+                    } else if state.in_char_class {
+                        // If not escaped and in char class, push to char range buffer.
+                        state.append_char_range_buf(c);
                     } else {
-                        // If not escaped, handle this as union operator
+                        // If not escaped and not in char class, handle this as union operator.
                         state.handle_union()?;
                     }
                 }
                 '*' => {
                     if state.escaped {
-                        // If escaped, handle this as literal |
                         state.escaped = false;
-                        state.handle_literal_char(c)?;
+                        if state.in_char_class {
+                            // If escaped and in char class, push to char range buffer.
+                            state.append_char_range_buf(c);
+                        } else {
+                            // If escaped and not in char class, handle this as literal |
+                            state.handle_literal_char(c)?;
+                        }
+                    } else if state.in_char_class {
+                        // If not escaped and in char class, push to char range buffer.
+                        state.append_char_range_buf(c);
                     } else {
-                        // If not escaped, handle this as kleene star operator
+                        // If not escaped, handle this as kleene star operator.
                         state.handle_kleene_star()?;
+                    }
+                }
+                '+' => {
+                    if state.escaped {
+                        state.escaped = false;
+                        if state.in_char_class {
+                            // If escaped and in char class, push to char range buffer.
+                            state.append_char_range_buf(c);
+                        } else {
+                            // If escaped and not in char class, handle this as literal +.
+                            state.handle_literal_char(c)?;
+                        }
+                    } else if state.in_char_class {
+                        // If not escaped and in char class, push to char range buffer.
+                        state.append_char_range_buf(c);
+                    } else {
+                        // If not escaped and not in char class, handle this as plus operator.
+                        state.handle_plus()?;
+                    }
+                }
+                '?' => {
+                    if state.escaped {
+                        state.escaped = false;
+                        if state.in_char_class {
+                            // If escaped and in char class, push to char range buffer.
+                            state.append_char_range_buf(c);
+                        } else {
+                            // If escaped and not in char class, handle this as literal ?.
+                            state.handle_literal_char(c)?;
+                        }
+                    } else if state.in_char_class {
+                        // If not escaped and in char class, push to char range buffer.
+                        state.append_char_range_buf(c);
+                    } else {
+                        // If not escaped and not in char class, handle this as optional operator.
+                        state.handle_optional()?;
                     }
                 }
                 '(' => {
                     if state.escaped {
-                        // If escaped, handle this as literal |
                         state.escaped = false;
-                        state.handle_literal_char(c)?;
+                        if state.in_char_class {
+                            // If escaped and in char class, push to char range buffer.
+                            state.append_char_range_buf(c);
+                        } else {
+                            // If escaped, handle this as literal (.
+                            state.handle_literal_char(c)?;
+                        }
+                    } else if state.in_char_class {
+                        // If not escaped and in char class, push to char range buffer.
+                        state.append_char_range_buf(c);
                     } else {
                         // If not escaped, handle this as left parentheses
                         state.handle_left_paren()?;
@@ -62,9 +122,17 @@ where
                 }
                 ')' => {
                     if state.escaped {
-                        // If escaped, handle this as literal |
                         state.escaped = false;
-                        state.handle_literal_char(c)?;
+                        if state.in_char_class {
+                            // If escaped and in char class, push to char range buffer.
+                            state.append_char_range_buf(c);
+                        } else {
+                            // If escaped, handle this as literal |
+                            state.handle_literal_char(c)?;
+                        }
+                    } else if state.in_char_class {
+                        // If not escaped and in char class, push to char range buffer.
+                        state.append_char_range_buf(c);
                     } else {
                         // If not escaped, handle this as left parentheses
                         state.handle_right_paren()?;
@@ -229,6 +297,8 @@ pub enum Operator {
     Union,
     Concatenation,
     KleeneStar,
+    Plus,
+    Optional,
     LeftParen,
     EmptyPlaceholder,
 }
@@ -326,6 +396,26 @@ where
 
     fn handle_kleene_star(&mut self) -> Result<()> {
         let op = Operator::KleeneStar;
+        self.precedence_reduce_stack(&op)?;
+
+        self.op_stack.push(op);
+        self.insert_concat = true;
+
+        Ok(())
+    }
+
+    fn handle_plus(&mut self) -> Result<()> {
+        let op = Operator::Plus;
+        self.precedence_reduce_stack(&op)?;
+
+        self.op_stack.push(op);
+        self.insert_concat = true;
+
+        Ok(())
+    }
+
+    fn handle_optional(&mut self) -> Result<()> {
+        let op = Operator::Optional;
         self.precedence_reduce_stack(&op)?;
 
         self.op_stack.push(op);
@@ -469,19 +559,30 @@ where
                     // If both of left parenthesis, do nothing
                     true
                 } else if *op == Operator::Union {
-                    // If current op is alternation, collapse last if it is kleene or concat.
-                    *last_op == Operator::KleeneStar || *last_op == Operator::Concatenation
+                    // If current op is alternation, collapse last if it is concat, kleene, plus,
+                    // or optional.
+                    *last_op == Operator::Concatenation
+                        || *last_op == Operator::KleeneStar
+                        || *last_op == Operator::Plus
+                        || *last_op == Operator::Optional
                 } else if *op == Operator::Concatenation {
-                    // If current op is concat, collapse last if it is kleene star.
+                    // If current op is concat, collapse last if it is kleene, plus, or optional.
                     *last_op == Operator::KleeneStar
-                } else if *op == Operator::KleeneStar {
-                    // If current op is kleene star, do not collapse last because kleene star is
-                    // highest precedence.
+                        || *last_op == Operator::Plus
+                        || *last_op == Operator::Optional
+                } else if *op == Operator::KleeneStar
+                    || *op == Operator::Plus
+                    || *op == Operator::Optional
+                {
+                    // If current op is kleene star, plus, or optional, do not collapse last
+                    // because they are highest precedence.
                     false
                 } else if *op == Operator::LeftParen {
-                    // If current op is left parenthesis, collapse last if it is kleene star.
-                    // KleeneStar star operates only on left node.
-                    *last_op == Operator::KleeneStar || *last_op == Operator::Concatenation
+                    // If current op is left parenthesis, collapse last if it is kleene star, plus,
+                    // or optional, which operate only on left node.
+                    *last_op == Operator::KleeneStar
+                        || *last_op == Operator::Plus
+                        || *last_op == Operator::Optional
                 } else {
                     false
                 }
