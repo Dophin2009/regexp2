@@ -3,6 +3,11 @@ use std::cmp;
 use std::convert::TryInto;
 use std::hash::Hash;
 
+const USV_START_1: char = '\u{0}';
+const USV_END_1: char = '\u{d7ff}';
+const USV_START_2: char = '\u{e000}';
+const USV_END_2: char = '\u{10ffff}';
+
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct CharClass {
     pub ranges: Vec<CharRange>,
@@ -23,6 +28,12 @@ impl CharClass {
 
     pub fn new_single(c: char) -> Self {
         Self::new_range(CharRange::new_single(c))
+    }
+
+    pub fn copy_into(dest: &mut CharClass, src: &CharClass) {
+        for r in src.ranges.clone() {
+            dest.add_range(r);
+        }
     }
 
     pub fn contains(&self, c: char) -> bool {
@@ -56,6 +67,11 @@ impl CharClass {
 
     pub fn add_range(&mut self, range: CharRange) {
         self.ranges.push(range);
+    }
+
+    pub fn all_but_newline() -> Self {
+        let ranges = CharRange::new('\n', '\n').complement();
+        Self::new_ranges(ranges)
     }
 
     pub fn letter() -> Self {
@@ -105,25 +121,25 @@ impl CharRange {
             shifted.try_into().unwrap()
         };
 
-        if self.start > '\u{e000}' {
-            let r1 = Self::new('\u{e000}', shift_char(self.start, false));
+        if self.start > USV_START_2 {
+            let r1 = Self::new(USV_START_2, shift_char(self.start, false));
             ranges.push(r1);
 
-            let r2 = Self::new('\u{0}', '\u{d7ff}');
+            let r2 = Self::new(USV_START_1, USV_END_1);
             ranges.push(r2);
-        } else if self.start > '\u{0}' {
-            let r = Self::new('\u{0}', shift_char(self.start, false));
+        } else if self.start > USV_START_1 {
+            let r = Self::new(USV_START_1, shift_char(self.start, false));
             ranges.push(r);
         }
 
-        if self.end < '\u{d7ff}' {
-            let r1 = Self::new(shift_char(self.end, true), '\u{d7ff}');
+        if self.end < USV_END_1 {
+            let r1 = Self::new(shift_char(self.end, true), USV_END_1);
             ranges.push(r1);
 
-            let r2 = Self::new('\u{e000}', '\u{10ffff}');
+            let r2 = Self::new(USV_START_2, USV_END_2);
             ranges.push(r2);
-        } else if self.end < '\u{10ffff}' {
-            let r = Self::new(shift_char(self.end, true), '\u{10ffff}');
+        } else if self.end < USV_END_2 {
+            let r = Self::new(shift_char(self.end, true), USV_END_2);
             ranges.push(r);
         }
 

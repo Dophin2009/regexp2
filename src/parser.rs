@@ -118,17 +118,22 @@ where
                 '^' => {
                     if state.escaped {
                         state.escaped = false;
-                        // If escaped and in char class, handle this as literal ^ in char
-                        // class.
-                        // If escaped but not in char class, handle this literal ^.
                         state.append_char_range_buf(c);
+                    // if state.in_char_class {
+                    // // If escaped and in char class, handle this as literal ^ in char
+                    // // class.
+                    // state.append_char_range_buf(c);
+                    // } else {
+                    // // If escaped but not in char class, handle this literal ^.
+                    // state.handle_literal_char(c)?;
+                    // }
                     } else if state.in_char_class {
+                        // If unescaped and in char class, check if this is the first char in the
+                        // character class. If so, set flag to negate the current character class
+                        // when shifted.
                         if state.char_range_buf.is_empty()
                             && state.char_class_buf.0.ranges.is_empty()
                         {
-                            // If unescaped and in char class, check if this is the first char in the
-                            // character class. If so, set flag to negate the current character class
-                            // when shifted.
                             state.char_class_buf.1 = true;
                         } else {
                             // Otherwise push this as regular char to char class.
@@ -137,6 +142,26 @@ where
                     } else {
                         // If unescaped and not in char class, handle this as literal ^.
                         state.handle_literal_char(c)?;
+                    }
+                }
+                '.' => {
+                    if state.escaped {
+                        state.escaped = false;
+                        if state.in_char_class {
+                            // If escaped and in char class, handle this as a literal . in char class.
+                            state.append_char_range_buf(c);
+                        } else {
+                            // If escaped and not in char class, handle this as a literal .
+                            state.handle_literal_char(c)?;
+                        }
+                    } else if state.in_char_class {
+                        // If unescaped and in char class, push . to char range buf as literal.
+                        state.append_char_range_buf(c);
+                    } else {
+                        // If unescaped and not in char class, add ranges for all chars except \n to
+                        // char class buf.
+                        let cc = CharClass::all_but_newline();
+                        state.handle_char_class(cc)?;
                     }
                 }
                 _ => {

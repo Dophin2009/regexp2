@@ -222,6 +222,19 @@ fn test_negation_symbol() {
 }
 
 #[test]
+fn test_wildcard() {
+    let exprs = ["."];
+    let valids = ["0", "9", "a", "b", "A", "^", "[", "何"];
+    let invalids = ["", "\n"];
+    run_tests!(&exprs, &valids, &invalids);
+
+    let exprs = ["[.]", r"[\.]", r"\."];
+    let valids = ["."];
+    let invalids = ["", "a", "b", "4", "[", "\n", ".."];
+    run_tests!(&exprs, &valids, &invalids);
+}
+
+#[test]
 fn test_malformed() {
     let exprs = [
         "(", ")", "a(", "(()", "*", "|", "*a", "**", "a|", "a)*", "(ab",
