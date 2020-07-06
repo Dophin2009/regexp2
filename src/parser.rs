@@ -1,6 +1,6 @@
+use crate::class::{CharClass, CharRange};
 use std::error;
 use std::fmt;
-use std::hash::Hash;
 use std::result;
 
 pub type Result<T> = result::Result<T, ParseError>;
@@ -134,60 +134,6 @@ where
 
         let head = state.stack.into_iter().last();
         Ok(head)
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct CharClass {
-    ranges: Vec<CharRange>,
-}
-
-impl CharClass {
-    pub fn new() -> Self {
-        CharClass { ranges: Vec::new() }
-    }
-
-    pub fn new_range(range: CharRange) -> Self {
-        CharClass {
-            ranges: vec![range],
-        }
-    }
-
-    pub fn new_ranges(ranges: Vec<CharRange>) -> Self {
-        CharClass { ranges }
-    }
-
-    pub fn new_single(c: char) -> Self {
-        CharClass {
-            ranges: vec![CharRange::new_single(c)],
-        }
-    }
-
-    pub fn contains(&self, c: char) -> bool {
-        self.ranges.iter().any(|r| r.contains(c))
-    }
-
-    pub fn add_range(&mut self, range: CharRange) {
-        self.ranges.push(range);
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct CharRange {
-    start: char,
-    end: char,
-}
-
-impl CharRange {
-    pub fn new(start: char, end: char) -> Self {
-        CharRange { start, end }
-    }
-    pub fn new_single(c: char) -> Self {
-        CharRange { start: c, end: c }
-    }
-
-    pub fn contains(&self, c: char) -> bool {
-        self.start <= c && c <= self.end
     }
 }
 

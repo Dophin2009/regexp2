@@ -1,12 +1,8 @@
+use crate::class::CharClass;
 use crate::nfa::{Transition, NFA};
-use crate::parser::CharClass;
 use crate::parser::{self, Operator, ParseError, Parser};
 use std::hash::Hash;
 use std::marker::PhantomData;
-
-// Use the regex-syntax crate to convert ranges of Unicode scalar values to equivalent sets of
-// ranges of Unicode codepoints.
-// use regex_syntax::utf8::{Utf8Sequence, Utf8Sequences};
 
 impl RegExp<NFA<CharClass>> {
     pub fn new_with_nfa(expr: &str) -> parser::Result<Self> {
