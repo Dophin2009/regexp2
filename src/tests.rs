@@ -196,6 +196,29 @@ fn test_char_class() {
     let valids = ["a]"];
     let invalids = ["", " ", "a", "]", "[a]", "[a]]", "b]"];
     run_tests!(&exprs, &valids, &invalids);
+
+    let exprs = [r"[\]-b]"];
+    let valids = ["]", "b", "a", "^", "`", "_"];
+    let invalids = ["", " ", "c", r"\", "[", "-", "]b", "]-b"];
+    run_tests!(&exprs, &valids, &invalids);
+}
+
+#[test]
+fn test_negation_symbol() {
+    let exprs = ["[^B-D]"];
+    let valids = ["a", "b", "c", "A", "E", "-", "1", "^", " "];
+    let invalids = ["", "B", "C", "D"];
+    run_tests!(&exprs, &valids, &invalids);
+
+    let exprs = ["[^1-8]"];
+    let valids = ["0", "9", "a", "b", "A", "^", "[", "]"];
+    let invalids = ["", "1", "3", "4", "8"];
+    run_tests!(&exprs, &valids, &invalids);
+
+    let exprs = ["[a^1-8]"];
+    let valids = ["a", "1", "3", "7", "8", "^"];
+    let invalids = ["", "b", "0", "9"];
+    run_tests!(&exprs, &valids, &invalids);
 }
 
 #[test]

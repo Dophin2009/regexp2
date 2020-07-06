@@ -82,7 +82,7 @@ where
                         // Enter char class until ] is seen if not currently in char class or
                         // escaped.
                         state.in_char_class = true;
-                        state.char_class_buf = CharClass::new();
+                        state.clear_char_class_buf();
                     }
                 }
                 ']' => {
@@ -107,9 +107,36 @@ where
                         // If escaped, handle this as literal \
                         state.escaped = false;
                         state.handle_literal_char(c)?;
-                    } else {
-                        // If unescaped and not in char class, handle next
+                    } else if state.in_char_class {
+                        // If unescaped and in char class, handle next.
                         state.escaped = true;
+                    } else {
+                        // If unescaped and not in char class, handle next.
+                        state.escaped = true;
+                    }
+                }
+                '^' => {
+                    if state.escaped {
+                        state.escaped = false;
+                        // If escaped and in char class, handle this as literal ^ in char
+                        // class.
+                        // If escaped but not in char class, handle this literal ^.
+                        state.append_char_range_buf(c);
+                    } else if state.in_char_class {
+                        if state.char_range_buf.is_empty()
+                            && state.char_class_buf.0.ranges.is_empty()
+                        {
+                            // If unescaped and in char class, check if this is the first char in the
+                            // character class. If so, set flag to negate the current character class
+                            // when shifted.
+                            state.char_class_buf.1 = true;
+                        } else {
+                            // Otherwise push this as regular char to char class.
+                            state.append_char_range_buf(c);
+                        }
+                    } else {
+                        // If unescaped and not in char class, handle this as literal ^.
+                        state.handle_literal_char(c)?;
                     }
                 }
                 _ => {
@@ -160,7 +187,7 @@ where
     insert_concat: bool,
 
     in_char_class: bool,
-    char_class_buf: CharClass,
+    char_class_buf: (CharClass, bool),
     char_range_buf: CharRangeBuf,
 
     shift_action: SF,
@@ -173,6 +200,10 @@ struct CharRangeBuf(Option<char>, Option<char>, Option<char>);
 impl CharRangeBuf {
     fn new() -> Self {
         CharRangeBuf(None, None, None)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0 == None
     }
 
     fn clear(&mut self) {
@@ -197,7 +228,7 @@ where
             insert_concat: false,
 
             in_char_class: false,
-            char_class_buf: CharClass::new(),
+            char_class_buf: (CharClass::new(), false),
             char_range_buf: CharRangeBuf::new(),
 
             shift_action,
@@ -293,15 +324,15 @@ where
         // char class as single-char ranges.
         let s0 = self.char_range_buf.0;
         if let Some(s) = s0 {
-            self.char_class_buf.add_range(CharRange::new_single(s));
+            self.char_class_buf.0.add_range(CharRange::new_single(s));
             let s1 = self.char_range_buf.1;
             if let Some(s) = s1 {
-                self.char_class_buf.add_range(CharRange::new_single(s));
+                self.char_class_buf.0.add_range(CharRange::new_single(s));
             }
         }
 
         // Throw error if nothing specified between brackets.
-        if self.char_class_buf.ranges.is_empty() {
+        if self.char_class_buf.0.ranges.is_empty() {
             return Err(ParseError::EmptyCharacterClass);
         }
 
@@ -309,11 +340,15 @@ where
         self.char_range_buf.clear();
 
         // Call shift action on completed char class.
-        let char_class = self.char_class_buf.clone();
+        let char_class = if self.char_class_buf.1 {
+            self.char_class_buf.0.complement()
+        } else {
+            self.char_class_buf.0.clone()
+        };
         self.handle_char_class(char_class)?;
 
         // Clear the char class buffer.
-        self.char_class_buf = CharClass::new();
+        self.clear_char_class_buf();
 
         Ok(())
     }
@@ -334,7 +369,7 @@ where
                 // the char class buffer.
                 let new_range_char = self.char_range_buf.0.unwrap();
                 let new_range = CharRange::new_single(new_range_char);
-                self.char_class_buf.add_range(new_range);
+                self.char_class_buf.0.add_range(new_range);
 
                 // Clear the range buffer.
                 self.char_range_buf.clear();
@@ -347,11 +382,15 @@ where
             let start = self.char_range_buf.0.unwrap();
             let end = c;
             let new_range = CharRange::new(start, end);
-            self.char_class_buf.add_range(new_range);
+            self.char_class_buf.0.add_range(new_range);
 
             self.char_range_buf.clear();
         }
         // There should never be a situation where all spots are filled.
+    }
+
+    fn clear_char_class_buf(&mut self) {
+        self.char_class_buf = (CharClass::new(), false);
     }
 
     fn reduce_stack(&mut self) -> Result<()> {
