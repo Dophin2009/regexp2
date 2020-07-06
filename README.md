@@ -21,7 +21,7 @@ The following operators are supported:
 -   `?` : the optional operator
 -   `|` : the union operator
 -   `(` and `)` : grouping
--    : escaping meta-characters
+-   \\ : escaping meta-characters
 -   `[abc]`, `[a-z]`, `[A-Z0-9]` : character classes with character
     ranges
 -   `[^abc]` : negation of character classes
