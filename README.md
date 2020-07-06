@@ -13,6 +13,9 @@ Second Edition*.
 
 ## Usage
 
+This crate uses the `iterator_fold_self` feature, so the nightly
+toolchain is required.
+
 The following operators are supported:
 
 -   `*` : the Kleene star
