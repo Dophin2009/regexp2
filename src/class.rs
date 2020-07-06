@@ -30,6 +30,13 @@ impl CharClass {
         Self::new_range(CharRange::new_single(c))
     }
 
+    pub fn new_singles(mut chars: Vec<char>) -> Self {
+        chars.sort();
+        chars.dedup();
+        let ranges = chars.iter().map(|&c| CharRange::new_single(c)).collect();
+        Self::new_ranges(ranges)
+    }
+
     pub fn copy_into(dest: &mut CharClass, src: &CharClass) {
         for r in src.ranges.clone() {
             dest.add_range(r);
@@ -44,14 +51,9 @@ impl CharClass {
         let new_ranges = self
             .ranges
             .iter()
-            .map(|r| {
-                let complement = r.complement();
-                // println!("{:?}", complement);
-                complement
-            })
+            .map(|r| r.complement())
             // Union of intersection of
             .fold_first(|union: Vec<CharRange>, complement| {
-                println!("{:?}", union);
                 union
                     .iter()
                     .flat_map(|ur: &CharRange| -> Vec<CharRange> {
@@ -76,12 +78,32 @@ impl CharClass {
 
     pub fn letter() -> Self {
         let ranges = LETTER.iter().map(|&r| r.into()).collect();
-        Self { ranges }
+        Self::new_ranges(ranges)
+    }
+
+    pub fn word() -> Self {
+        let ranges = vec![
+            CharRange::new('A', 'Z'),
+            CharRange::new('a', 'z'),
+            CharRange::new('0', '9'),
+            CharRange::new('_', '_'),
+        ];
+        Self::new_ranges(ranges)
     }
 
     pub fn decimal_number() -> Self {
         let ranges = DECIMAL_NUMBER.iter().map(|&r| r.into()).collect();
-        Self { ranges }
+        Self::new_ranges(ranges)
+    }
+
+    pub fn whitespace() -> Self {
+        let mut cc = CharClass::new_singles(vec![
+            ' ', '\u{000c}', '\n', '\r', '\t', '\u{000b}', '\u{00a0}', '\u{1680}', '\u{2028}',
+            '\u{2029}', '\u{202f}', '\u{205f}', '\u{3000}', '\u{feff}',
+        ]);
+        let tmp_range = CharClass::new_range(CharRange::new('\u{2000}', '\u{200a}'));
+        CharClass::copy_into(&mut cc, &tmp_range);
+        cc
     }
 }
 

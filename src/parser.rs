@@ -118,15 +118,14 @@ where
                 '^' => {
                     if state.escaped {
                         state.escaped = false;
-                        state.append_char_range_buf(c);
-                    // if state.in_char_class {
-                    // // If escaped and in char class, handle this as literal ^ in char
-                    // // class.
-                    // state.append_char_range_buf(c);
-                    // } else {
-                    // // If escaped but not in char class, handle this literal ^.
-                    // state.handle_literal_char(c)?;
-                    // }
+                        if state.in_char_class {
+                            // If escaped and in char class, handle this as literal ^ in char
+                            // class.
+                            state.append_char_range_buf(c);
+                        } else {
+                            // If escaped but not in char class, handle this literal ^.
+                            state.handle_literal_char(c)?;
+                        }
                     } else if state.in_char_class {
                         // If unescaped and in char class, check if this is the first char in the
                         // character class. If so, set flag to negate the current character class
@@ -165,10 +164,46 @@ where
                     }
                 }
                 _ => {
-                    if state.in_char_class {
+                    // Kinda spaghetti:
+                    let mut is_special = true;
+                    let mut cc = CharClass::new();
+                    if state.escaped {
+                        state.escaped = false;
+                        // If sequence is \d,
+                        if c == 'd' {
+                            cc = CharClass::decimal_number();
+                        } else if c == 'D' {
+                            cc = CharClass::decimal_number().complement();
+                        } else if c == 'w' {
+                            cc = CharClass::word();
+                        } else if c == 'W' {
+                            cc = CharClass::word().complement();
+                        } else if c == 'n' {
+                            cc = CharClass::new_single('\n');
+                        } else if c == 's' {
+                            cc = CharClass::whitespace();
+                        } else if c == 'S' {
+                            cc = CharClass::whitespace().complement();
+                        } else {
+                            is_special = false;
+                        }
+                    } else {
+                        is_special = false;
+                    }
+
+                    if is_special {
+                        if state.in_char_class {
+                            state.handle_incomplete_char_range_buf();
+                            CharClass::copy_into(&mut state.char_class_buf.0, &cc);
+                        } else {
+                            state.handle_char_class(cc)?;
+                        }
+                    } else if state.in_char_class {
+                        // If in char class, push char to range buffer.
                         state.append_char_range_buf(c);
                     } else {
-                        state.handle_literal_char(c)?
+                        // If not in char class, handle as literal.
+                        state.handle_literal_char(c)?;
                     }
                 }
             }
@@ -345,24 +380,12 @@ where
         // End char class if not escaped and in char class.
         self.in_char_class = false;
 
-        // Existing chars in first and second spots of buffer are added to
-        // char class as single-char ranges.
-        let s0 = self.char_range_buf.0;
-        if let Some(s) = s0 {
-            self.char_class_buf.0.add_range(CharRange::new_single(s));
-            let s1 = self.char_range_buf.1;
-            if let Some(s) = s1 {
-                self.char_class_buf.0.add_range(CharRange::new_single(s));
-            }
-        }
-
         // Throw error if nothing specified between brackets.
-        if self.char_class_buf.0.ranges.is_empty() {
+        if self.char_range_buf.is_empty() && self.char_class_buf.0.ranges.is_empty() {
             return Err(ParseError::EmptyCharacterClass);
         }
 
-        // Clear the char range buffer.
-        self.char_range_buf.clear();
+        self.handle_incomplete_char_range_buf();
 
         // Call shift action on completed char class.
         let char_class = if self.char_class_buf.1 {
@@ -376,6 +399,22 @@ where
         self.clear_char_class_buf();
 
         Ok(())
+    }
+
+    fn handle_incomplete_char_range_buf(&mut self) {
+        // Existing chars in first and second spots of buffer are added to
+        // char class as single-char ranges.
+        let s0 = self.char_range_buf.0;
+        if let Some(s) = s0 {
+            self.char_class_buf.0.add_range(CharRange::new_single(s));
+            let s1 = self.char_range_buf.1;
+            if let Some(s) = s1 {
+                self.char_class_buf.0.add_range(CharRange::new_single(s));
+            }
+        }
+
+        // Clear the char range buffer.
+        self.char_range_buf.clear();
     }
 
     /// This method should only be called when in_char_class is true.
