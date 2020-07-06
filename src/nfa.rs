@@ -3,17 +3,27 @@ use crate::table::Table;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
+/// A non-deterministic finite automaton, or NFA.
 #[derive(Debug)]
 pub struct NFA<T: Clone + Eq + Hash> {
+    /// An NFA has a single initial state.
     pub initial_state: u32,
+    /// The number of total states in the NFA. There is a state labeled i for every i where 0 <= i
+    /// < total_states.
     pub total_states: u32,
+    /// The set of accepting states.
     pub final_states: HashSet<u32>,
+    /// A lookup table for transitions between states.
     pub transition: Table<u32, Transition<T>, HashSet<u32>>,
 }
 
+/// A transition between states in an NFA.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Transition<T: Clone + Eq + Hash> {
+    /// A transition on some input symbol.
     Some(T),
+    /// An epsilon transition allows the NFA to change its state spontaneously without consuming an
+    /// input symbol.
     Epsilon,
 }
 
@@ -42,7 +52,9 @@ where
     }
 
     /// Clone the states and transitions of an NFA into another. The initial and final states of the
-    /// source are not marked as such in the destination.
+    /// source are not marked as such in the destination. These states can be accessed by i +
+    /// offset, where i is the label of the state in the source NFA, and offset is the initial
+    /// total number of states in the destination NFA.
     pub fn copy_into(dest: &mut NFA<T>, src: &NFA<T>) {
         let offset = dest.total_states;
         // Create new states.
@@ -169,14 +181,18 @@ where
         }
     }
 
+    // Add a non-epsilon transition. See [add_transition].
     pub fn add_labeled_transition(&mut self, start: u32, end: u32, label: T) -> Option<()> {
         self.add_transition(start, end, Transition::Some(label))
     }
 
+    // Add an epsilon transition. See [add_transition].
     pub fn add_epsilon_transition(&mut self, start: u32, end: u32) -> Option<()> {
         self.add_transition(start, end, Transition::Epsilon)
     }
 
+    /// Computes the function epsilon-closure for some given state in the NFA. Returns the set of
+    /// all states accessible from the given state on epsilon transitions only.
     pub fn epsilon_closure(&self, state: u32) -> HashSet<u32> {
         let transitions = self.transitions_from(state);
         let mut closure: HashSet<_> = transitions
@@ -188,12 +204,14 @@ where
         closure
     }
 
+    /// Returns the transitions and destinations from a specific state.
     pub fn transitions_from(&self, state: u32) -> HashMap<&Transition<T>, &HashSet<u32>> {
         self.transition.get_row(&state)
     }
 }
 
 impl<T: Clone + Eq + Hash> Clone for NFA<T> {
+    /// Clone the NFA.
     fn clone(&self) -> Self {
         NFA {
             total_states: self.total_states,
@@ -208,6 +226,7 @@ impl<T> NFA<T>
 where
     T: Clone + Eq + Hash,
 {
+    /// Produces an NFAIterator for the NFA on some input iterator. See [NFAIterator].
     pub fn iter_input<'a, S, I>(&'a self, input: I) -> NFAIterator<'a, T, S, I>
     where
         T: PartialEq<S>,
@@ -216,6 +235,7 @@ where
         NFAIterator::new(self, input)
     }
 
+    /// Determines if the given input is accepted by the NFA.
     pub fn is_exact_match<'a, S, I>(&self, input: I) -> bool
     where
         T: PartialEq<S>,
@@ -230,6 +250,8 @@ where
     }
 }
 
+/// An iterator on NFA states over some input. The values of the input
+/// iterator must be able to be matched to transitions.
 #[derive(Debug)]
 pub struct NFAIterator<'a, T, S, I>
 where
@@ -250,6 +272,7 @@ where
 {
     type Item = HashSet<u32>;
 
+    /// Consumes one input symbol and advances the state of the NFA according to that symbol.
     fn next(&mut self) -> Option<Self::Item> {
         self.iter_c += 1;
         if self.iter_c == 1 {
@@ -273,6 +296,7 @@ where
     T: Clone + Eq + Hash + PartialEq<S>,
     I: Iterator<Item = S>,
 {
+    /// Create a new NFAIterator on the given input for the given NFA.
     fn new(nfa: &'a NFA<T>, input: I) -> Self {
         NFAIterator {
             input,
@@ -282,6 +306,7 @@ where
         }
     }
 
+    /// Computes the union of epsilon-closures for each state in the given set of states.
     fn epsilon_closure_set(&self, state_set: &HashSet<u32>) -> HashSet<u32> {
         let mut set = state_set.clone();
         for state in state_set.iter() {
@@ -291,6 +316,8 @@ where
         set
     }
 
+    /// Returns the union of the set of states reached from each state in the given set of states
+    /// along the given input symbol.
     fn move_set(&self, state_set: &HashSet<u32>, input: &S) -> HashSet<u32> {
         let mut set = HashSet::new();
         for state in state_set.iter() {

@@ -3,8 +3,11 @@ use std::error;
 use std::fmt;
 use std::result;
 
+/// Alias for [std::result::Result] for [ParseError].
 pub type Result<T> = result::Result<T, ParseError>;
 
+/// Parser implementations must define the shift and reduce actions. The symbols in a regular
+/// expression are iterated through and parsed according to these functions.
 pub trait Parser<T>
 where
     T: Clone,
@@ -18,7 +21,9 @@ where
 
     fn reduce_action(&self, stack: &mut Vec<T>, op_stack: &mut Vec<Operator>) -> Result<()>;
 
+    /// Compile a regular expresion.
     fn parse(&self, expr: &str) -> Result<Option<T>> {
+        // Overall super spaghetti, needs refactoring and cleaning up.
         let mut state = ParserState::new(
             |stack, op_stack, c| self.shift_action(stack, op_stack, c),
             |stack, op_stack| self.reduce_action(stack, op_stack),
@@ -292,6 +297,7 @@ where
     }
 }
 
+/// Set of valid operators.
 #[derive(Debug, PartialEq)]
 pub enum Operator {
     Union,
@@ -614,10 +620,14 @@ where
     }
 }
 
+/// Error returned when attempting to parse an invalid regular expression.
 #[derive(Debug)]
 pub enum ParseError {
+    /// There are an invalid number of operators, or operands are missing.
     UnbalancedOperators,
+    /// There are one or more sets of unclosed parentheses.
     UnbalancedParentheses,
+    /// Bracketed character classes may not empty.
     EmptyCharacterClass,
 }
 
