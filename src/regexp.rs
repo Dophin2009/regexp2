@@ -1,5 +1,4 @@
 use crate::class::CharClass;
-use crate::hash_set;
 use crate::nfa::{Transition, NFA};
 use crate::parser::{self, Operator, ParseError, Parser};
 use std::hash::Hash;
