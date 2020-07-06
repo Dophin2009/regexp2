@@ -5,69 +5,6 @@ use std::result;
 
 pub type Result<T> = result::Result<T, ParseError>;
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct CharClass {
-    ranges: Vec<CharRange>,
-}
-
-impl CharClass {
-    pub fn new() -> Self {
-        CharClass { ranges: Vec::new() }
-    }
-
-    pub fn new_range(range: CharRange) -> Self {
-        CharClass {
-            ranges: vec![range],
-        }
-    }
-
-    pub fn new_ranges(ranges: Vec<CharRange>) -> Self {
-        CharClass { ranges }
-    }
-
-    pub fn new_single(c: char) -> Self {
-        CharClass {
-            ranges: vec![CharRange::new_single(c)],
-        }
-    }
-
-    pub fn contains(&self, c: char) -> bool {
-        self.ranges.iter().any(|r| r.contains(c))
-    }
-
-    pub fn add_range(&mut self, range: CharRange) {
-        self.ranges.push(range);
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct CharRange {
-    start: char,
-    end: char,
-}
-
-impl CharRange {
-    pub fn new(start: char, end: char) -> Self {
-        CharRange { start, end }
-    }
-    pub fn new_single(c: char) -> Self {
-        CharRange { start: c, end: c }
-    }
-
-    pub fn contains(&self, c: char) -> bool {
-        self.start <= c && c <= self.end
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Operator {
-    Union,
-    Concatenation,
-    KleeneStar,
-    LeftParen,
-    EmptyPlaceholder,
-}
-
 pub trait Parser<T>
 where
     T: Clone,
@@ -159,34 +96,7 @@ where
                             state.handle_literal_char(c)?;
                         }
                     } else if state.in_char_class {
-                        // End char class if not escaped and in char class.
-                        state.in_char_class = false;
-
-                        // Existing chars in first and second spots of buffer are added to
-                        // char class as single-char ranges.
-                        let s0 = state.char_range_buf.0;
-                        if let Some(s) = s0 {
-                            state.char_class_buf.add_range(CharRange::new_single(s));
-                            let s1 = state.char_range_buf.1;
-                            if let Some(s) = s1 {
-                                state.char_class_buf.add_range(CharRange::new_single(s));
-                            }
-                        }
-
-                        // Throw error if nothing specified between brackets.
-                        if state.char_class_buf.ranges.is_empty() {
-                            return Err(ParseError::EmptyCharacterClass);
-                        }
-
-                        // Clear the char range buffer.
-                        state.char_range_buf.clear();
-
-                        // Call shift action on completed char class.
-                        let char_class = state.char_class_buf.clone();
-                        state.handle_char_class(char_class)?;
-
-                        // Clear the char class buffer.
-                        state.char_class_buf = CharClass::new();
+                        state.handle_right_bracket()?;
                     } else {
                         // Handle ] as literal if not escaped or in char class.
                         state.handle_literal_char(c)?;
@@ -225,6 +135,69 @@ where
         let head = state.stack.into_iter().last();
         Ok(head)
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct CharClass {
+    ranges: Vec<CharRange>,
+}
+
+impl CharClass {
+    pub fn new() -> Self {
+        CharClass { ranges: Vec::new() }
+    }
+
+    pub fn new_range(range: CharRange) -> Self {
+        CharClass {
+            ranges: vec![range],
+        }
+    }
+
+    pub fn new_ranges(ranges: Vec<CharRange>) -> Self {
+        CharClass { ranges }
+    }
+
+    pub fn new_single(c: char) -> Self {
+        CharClass {
+            ranges: vec![CharRange::new_single(c)],
+        }
+    }
+
+    pub fn contains(&self, c: char) -> bool {
+        self.ranges.iter().any(|r| r.contains(c))
+    }
+
+    pub fn add_range(&mut self, range: CharRange) {
+        self.ranges.push(range);
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct CharRange {
+    start: char,
+    end: char,
+}
+
+impl CharRange {
+    pub fn new(start: char, end: char) -> Self {
+        CharRange { start, end }
+    }
+    pub fn new_single(c: char) -> Self {
+        CharRange { start: c, end: c }
+    }
+
+    pub fn contains(&self, c: char) -> bool {
+        self.start <= c && c <= self.end
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Operator {
+    Union,
+    Concatenation,
+    KleeneStar,
+    LeftParen,
+    EmptyPlaceholder,
 }
 
 #[derive(Debug)]
@@ -362,6 +335,39 @@ where
         }
 
         self.insert_concat = true;
+
+        Ok(())
+    }
+
+    fn handle_right_bracket(&mut self) -> Result<()> {
+        // End char class if not escaped and in char class.
+        self.in_char_class = false;
+
+        // Existing chars in first and second spots of buffer are added to
+        // char class as single-char ranges.
+        let s0 = self.char_range_buf.0;
+        if let Some(s) = s0 {
+            self.char_class_buf.add_range(CharRange::new_single(s));
+            let s1 = self.char_range_buf.1;
+            if let Some(s) = s1 {
+                self.char_class_buf.add_range(CharRange::new_single(s));
+            }
+        }
+
+        // Throw error if nothing specified between brackets.
+        if self.char_class_buf.ranges.is_empty() {
+            return Err(ParseError::EmptyCharacterClass);
+        }
+
+        // Clear the char range buffer.
+        self.char_range_buf.clear();
+
+        // Call shift action on completed char class.
+        let char_class = self.char_class_buf.clone();
+        self.handle_char_class(char_class)?;
+
+        // Clear the char class buffer.
+        self.char_class_buf = CharClass::new();
 
         Ok(())
     }
