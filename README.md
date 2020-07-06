@@ -29,10 +29,9 @@ The following operators are supported:
     non-decimal number characters, respectively
 -   `\w`, `\W` : all word characters (alphanumeric and `_`) and non-word
     characters, respectively
--   `\s`, `\S` : all whitespace (equivalent to \[ `\u{0020}`,
-    `\u{000c}`, `\n`, `\r`, `\t`, `\u{000b}`, `\u{00a0}`, `\u{1680}`,
-    `\u{2028}`, `\u{2029}`, `\u{202f}`, `\u{205f}`, `\u{3000}`,
-    `\u{feff}` \]) and non-whitespace characters, respectively
+-   `\s`, `\S` : all whitespace (equivalent to
+    `[ \u{000c}\n\r\t\u{000b}\u{00a0}\u{1680}\u{2000}-\u{200a}\u{2028}\u{2029}\u{202f}\u{205f}\u{3000}\u{feff}]`
+    ) and non-whitespace characters, respectively
 -   `.` : any character except newline (`\n`)
 
 A fairly arbitrary usage example:
