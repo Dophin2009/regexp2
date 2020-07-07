@@ -204,6 +204,16 @@ where
         closure
     }
 
+    /// Computes the union of epsilon-closures for each state in the given set of states.
+    pub fn epsilon_closure_set(&self, state_set: &HashSet<u32>) -> HashSet<u32> {
+        let mut set = state_set.clone();
+        for state in state_set.iter() {
+            let state_closure = self.epsilon_closure(*state);
+            set = set.union(&state_closure).map(|&i| i).collect();
+        }
+        set
+    }
+
     /// Returns the transitions and destinations from a specific state.
     pub fn transitions_from(&self, state: u32) -> HashMap<&Transition<T>, &HashSet<u32>> {
         self.transition.get_row(&state)
@@ -285,7 +295,7 @@ where
         };
 
         let moved_set = self.move_set(&self.state_set, &c);
-        self.state_set = self.epsilon_closure_set(&moved_set);
+        self.state_set = self.nfa.epsilon_closure_set(&moved_set);
 
         Some(self.state_set.clone())
     }
@@ -306,18 +316,6 @@ where
         }
     }
 
-    /// Computes the union of epsilon-closures for each state in the given set of states.
-    fn epsilon_closure_set(&self, state_set: &HashSet<u32>) -> HashSet<u32> {
-        let mut set = state_set.clone();
-        for state in state_set.iter() {
-            let state_closure = self.nfa.epsilon_closure(*state);
-            set = set.union(&state_closure).map(|&i| i).collect();
-        }
-        set
-    }
-
-    /// Returns the union of the set of states reached from each state in the given set of states
-    /// along the given input symbol.
     fn move_set(&self, state_set: &HashSet<u32>, input: &S) -> HashSet<u32> {
         let mut set = HashSet::new();
         for state in state_set.iter() {
