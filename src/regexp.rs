@@ -32,7 +32,7 @@ pub trait Engine {
 
 impl RegExp<NFA<CharClass>> {
     /// Create a compiled regular expression that uses an NFA to evaluate input strings.
-    pub fn new_with_nfa(expr: &str) -> parser::Result<Self> {
+    pub fn new(expr: &str) -> parser::Result<Self> {
         let parser = NFAParser::new();
         let nfa: NFA<CharClass> = parser.parse(expr)?.unwrap();
 
