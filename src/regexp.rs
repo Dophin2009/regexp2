@@ -163,6 +163,7 @@ where
 }
 
 impl RegExp<DFA<CharClass>> {
+    /// Create a compiled regular expression that uses a DFA to evaluate input strings.
     pub fn new_with_dfa(expr: &str) -> parser::Result<Self> {
         let parser = NFAParser::new();
         let nfa: NFA<CharClass> = parser.parse(expr)?.unwrap();
@@ -182,6 +183,8 @@ impl Engine for DFA<CharClass> {
 }
 
 impl Disjoin for CharClass {
+    /// Create a set of disjoint CharClass from a set of CharClass. Algorithm inspired by [this
+    /// Stack Overflow answer](https://stackoverflow.com/a/55482655/8955108).
     fn disjoin(vec: Vec<&Self>) -> Vec<Self> {
         let ranges: Vec<_> = vec.iter().flat_map(|cc| cc.ranges.clone()).collect();
 
