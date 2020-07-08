@@ -1,8 +1,8 @@
 use crate::class::CharClass;
-use crate::dfa::DFA;
 use crate::engines::{Engine, NFAParser};
-use crate::nfa::NFA;
 use crate::parser::{self, Parser};
+
+use automata::{DFA, NFA};
 
 /// A compiled regular expression for matching strings. It may be used to determine if given
 /// strings are within the language described by the regular expression.

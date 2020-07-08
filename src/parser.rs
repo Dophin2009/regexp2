@@ -1,4 +1,5 @@
 use crate::class::{CharClass, CharRange};
+
 use std::error;
 use std::fmt;
 use std::result;

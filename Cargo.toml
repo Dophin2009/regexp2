@@ -5,4 +5,5 @@ authors = ["Eric Zhao <21zhaoe@protonmail.com>"]
 edition = "2018"
 
 [dependencies]
+automata = { path = "../automata" }
 tree = { git = "https://github.com/apasel422/tree.git" }

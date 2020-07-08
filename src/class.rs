@@ -1,5 +1,6 @@
 use crate::disjoint::{self, DisjointSet, Intersect, Priority};
 use crate::ranges::{DECIMAL_NUMBER, LETTER};
+
 use std::cmp;
 use std::convert::TryInto;
 use std::hash::Hash;

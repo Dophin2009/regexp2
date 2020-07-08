@@ -1,11 +1,12 @@
 use crate::ast::{self, ASTNode};
 use crate::class::{CharClass, CharRange};
-use crate::dfa::{Disjoin, DFA};
-use crate::nfa::{Transition, NFA};
 use crate::parser::{self, Operator, ParseError, Parser};
+
 use std::convert::{TryFrom, TryInto};
 use std::hash::Hash;
 use std::marker::PhantomData;
+
+use automata::{dfa::Disjoin, nfa::Transition, DFA, NFA};
 
 /// A trait implemented by regular expression backends, used to evaluate input strings.
 pub trait Engine {
