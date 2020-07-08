@@ -5,11 +5,11 @@ The code `regexp2` is significantly less spaghetti and more flexible
 than that of [`regexp`](../regexp). More operators and syntax are
 supported.
 
-Currently, an NFA backend is supported. A similar, but more generic
-parsing algorithm to that of `regexp` is used, and the equivalent NFA of
-a regular expression is created using the subset construction described
-in Algorithm 3.23 in *Compilers: Principles, Techniques, and Tool,
-Second Edition*.
+Currently, NFA and DFA backends is supported. DFAs are constructed by
+converting from NFAs. A similar, but more generic parsing algorithm to
+that of `regexp` is used, and the equivalent NFA of a regular expression
+is created using the subset construction described in Algorithm 3.23 in
+*Compilers: Principles, Techniques, and Tool, Second Edition*.
 
 ## Usage
 
@@ -49,11 +49,11 @@ fn main() {
   assert!(re.is_exact_match("aababb"));
 
   // Any sequence of characters that are not B, C, D, E, F or any lowercase letter.
-  re = RegExp::new_with_nfa("[^B-Fa-z]*");
+  re = RegExp::new_with_dfa("[^B-Fa-z]*");
   assert!(re.is_exact_match("AGAQR"));
 
   // Any sequence of at least one digit followed by nothing or an alphanumeric or underscore.
-  re = RegExp::new_with_nfa("\d+\w?");
+  re = RegExp::new_with_dfa("\d+\w?");
   assert!(re.is_exact_match("3a"));
   assert!(re.is_exact_match("08m"));
   assert!(re.is_exact_match("999_"));
