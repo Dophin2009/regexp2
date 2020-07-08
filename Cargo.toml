@@ -5,3 +5,4 @@ authors = ["Eric Zhao <21zhaoe@protonmail.com>"]
 edition = "2018"
 
 [dependencies]
+tree = { git = "https://github.com/apasel422/tree.git" }

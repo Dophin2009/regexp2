@@ -252,7 +252,7 @@ where
                         } else if c == 'W' {
                             cc = CharClass::word().complement();
                         } else if c == 'n' {
-                            cc = CharClass::new_single('\n');
+                            cc = '\n'.into();
                         } else if c == 's' {
                             cc = CharClass::whitespace();
                         } else if c == 'S' {
@@ -267,7 +267,7 @@ where
                     if is_special {
                         if state.in_char_class {
                             state.handle_incomplete_char_range_buf();
-                            CharClass::copy_into(&mut state.char_class_buf.0, &cc);
+                            state.char_class_buf.0.copy_from(&cc);
                         } else {
                             state.handle_char_class(cc)?;
                         }
@@ -373,7 +373,7 @@ where
     }
 
     fn handle_literal_char(&mut self, c: char) -> Result<()> {
-        let char_class = CharClass::new_single(c);
+        let char_class = c.into();
         self.handle_char_class(char_class)
     }
 

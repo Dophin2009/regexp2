@@ -1,6 +1,7 @@
 #![feature(iterator_fold_self)]
 
 mod class;
+mod disjoint;
 mod parser;
 mod ranges;
 mod regexp;

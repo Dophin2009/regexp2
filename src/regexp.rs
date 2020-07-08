@@ -4,6 +4,29 @@ use crate::parser::{self, Operator, ParseError, Parser};
 use std::hash::Hash;
 use std::marker::PhantomData;
 
+/// A compiled regular expression for matching strings. It may be used to determine if given
+/// strings are within the language described by the regular expression.
+#[derive(Debug)]
+pub struct RegExp<E: Engine> {
+    /// The regular expression represented by this structure.
+    expr: String,
+    /// The compiled backend of the regular expression used to evaluate input strings.
+    engine: E,
+}
+
+impl<E: Engine> RegExp<E> {
+    /// Determine if the given input string is within the language described by the regular
+    /// expression.
+    pub fn is_exact_match(&self, input: &str) -> bool {
+        self.engine.is_exact_match(input)
+    }
+}
+
+/// A trait implemented by regular expression backends, used to evaluate input strings.
+pub trait Engine {
+    fn is_exact_match(&self, input: &str) -> bool;
+}
+
 impl RegExp<NFA<CharClass>> {
     /// Create a compiled regular expression that uses an NFA to evaluate input strings.
     pub fn new_with_nfa(expr: &str) -> parser::Result<Self> {
@@ -33,29 +56,6 @@ impl From<CharClass> for Transition<CharClass> {
     fn from(c: CharClass) -> Self {
         Transition::Some(c)
     }
-}
-
-/// A compiled regular expression for matching strings. It may be used to determine if given
-/// strings are within the language described by the regular expression.
-#[derive(Debug)]
-pub struct RegExp<E: Engine> {
-    /// The regular expression represented by this structure.
-    expr: String,
-    /// The compiled backend of the regular expression used to evaluate input strings.
-    engine: E,
-}
-
-impl<E: Engine> RegExp<E> {
-    /// Determine if the given input string is within the language described by the regular
-    /// expression.
-    pub fn is_exact_match(&self, input: &str) -> bool {
-        self.engine.is_exact_match(input)
-    }
-}
-
-/// A trait implemented by regular expression backends, used to evaluate input strings.
-pub trait Engine {
-    fn is_exact_match(&self, input: &str) -> bool;
 }
 
 /// A regular expression parser that produces an NFA that describes the same language as the
