@@ -4,6 +4,7 @@ macro_rules! run_invalid_tests {
     ($exprs:expr) => {{
         $exprs.iter().for_each(|&expr| {
             RegExp::new_with_nfa(expr).unwrap_err();
+            RegExp::new_with_dfa(expr).unwrap_err();
         });
     }};
 }
