@@ -178,9 +178,11 @@ impl DState {
 
 impl<T> From<NFA<T>> for DFA<T>
 where
-    T: Clone + Disjoin + Eq + Hash + std::fmt::Debug,
+    T: Clone + Disjoin + Eq + Hash,
 {
-    // Create an equivalent DFA from an NFA.
+    // Create an equivalent DFA from an NFA using the subset construction described by Algorithm
+    // 3.20. The construction is slightly modified, with inspiration from [this Stack Overflow
+    //   answer](https://stackoverflow.com/a/25832898/8955108) to accomodate character ranges.
     fn from(nfa: NFA<T>) -> Self {
         let mut dfa = DFA::new();
         let mut marked_states = Vec::new();
@@ -201,8 +203,6 @@ where
         unmarked_states.push_back(initial_unmarked);
 
         while let Some(s) = unmarked_states.pop_front() {
-            println!("{:?}\n", s);
-
             // Get all non-epsilon transitions and destinations from the NFA states in this set
             // state.
             let transition_map: Vec<(&T, &HashSet<u32>)> = s
@@ -222,7 +222,6 @@ where
             let transitions: Vec<&T> = transition_map.iter().map(|(t, _)| *t).collect();
             // Disjoin transitions.
             let disjoint_transitions = T::disjoin(transitions);
-            println!("{:?}\n", disjoint_transitions);
 
             for t in disjoint_transitions {
                 let moved_set: HashSet<u32> = transition_map
@@ -268,8 +267,6 @@ where
             // Mark this state
             marked_states.push(s);
         }
-
-        println!("{:#?}", dfa);
 
         dfa
     }
