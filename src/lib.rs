@@ -1,5 +1,6 @@
 #![feature(iterator_fold_self)]
 
+mod ast;
 mod class;
 mod disjoint;
 mod parser;

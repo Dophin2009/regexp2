@@ -1,8 +1,9 @@
+use crate::ast::{self, ASTNode};
 use crate::class::{CharClass, CharRange};
 use crate::dfa::{Disjoin, DFA};
 use crate::nfa::{Transition, NFA};
 use crate::parser::{self, Operator, ParseError, Parser};
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use std::hash::Hash;
 use std::marker::PhantomData;
 
@@ -213,5 +214,101 @@ impl Disjoin for CharClass {
 
     fn contains(&self, other: &Self) -> bool {
         !self.intersection(other).is_empty()
+    }
+}
+
+pub struct ASTParser<T>
+where
+    T: Clone + Eq + Hash + From<CharClass>,
+{
+    _phantom: PhantomData<T>,
+}
+
+impl<T> ASTParser<T>
+where
+    T: Clone + Eq + Hash + From<CharClass>,
+{
+    /// Create a new ASTParser.
+    pub fn new() -> Self {
+        ASTParser {
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<T> Parser<ASTNode<T>> for ASTParser<T>
+where
+    T: Clone + Eq + Hash + From<CharClass>,
+{
+    /// Implement the shift action. A new leaf node is pushed to the parsing stack.
+    fn shift_action(
+        &self,
+        stack: &mut Vec<ASTNode<T>>,
+        _: &mut Vec<Operator>,
+        c: CharClass,
+    ) -> parser::Result<()> {
+        let new_node = ASTNode::Leaf(c.into());
+        stack.push(new_node);
+        Ok(())
+    }
+
+    /// Implement the reduce action for parsing. The most recent operator is popped from the stack
+    /// and child nodes are popped from the node stack, and a new node is constructed and pushed to
+    /// the stack.
+    fn reduce_action(
+        &self,
+        stack: &mut Vec<ASTNode<T>>,
+        op_stack: &mut Vec<Operator>,
+    ) -> parser::Result<()> {
+        // Pop the last operator off.
+        let op = op_stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+
+        let new_node;
+        if op == Operator::EmptyPlaceholder {
+            // A new blank leaf node is pushed to the stack if operator is an empty placeholder.
+            new_node = ASTNode::None;
+        } else {
+            // Otherwise, a new branch node is constructed from operands.
+            let node_op = op
+                .try_into()
+                .map_err(|_| ParseError::UnbalancedParentheses)?;
+            let c1: ASTNode<T>;
+            let c2: ASTNode<T>;
+
+            match node_op {
+                // Union and concatenation branch nodes are constructed from the 2 topmost nodes.
+                ast::Operator::Union | ast::Operator::Concatenation => {
+                    c2 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                    c1 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                }
+                // A new node is constructed from the topmost node on the stack for kleene star,
+                // plus, and optional operators.
+                ast::Operator::KleeneStar | ast::Operator::Plus | ast::Operator::Optional => {
+                    c1 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                    c2 = ASTNode::None;
+                }
+            }
+
+            new_node = ASTNode::Branch(node_op, Box::new(c1), Box::new(c2));
+        }
+
+        stack.push(new_node);
+        Ok(())
+    }
+}
+
+impl TryFrom<Operator> for ast::Operator {
+    type Error = ();
+
+    fn try_from(op: Operator) -> Result<Self, Self::Error> {
+        match op {
+            Operator::KleeneStar => Ok(Self::KleeneStar),
+            Operator::Plus => Ok(Self::Plus),
+            Operator::Optional => Ok(Self::Optional),
+            Operator::Concatenation => Ok(Self::Concatenation),
+            Operator::Union => Ok(Self::Union),
+            Operator::EmptyPlaceholder => Err(()),
+            Operator::LeftParen => Err(()),
+        }
     }
 }
