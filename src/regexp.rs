@@ -1,8 +1,9 @@
-use crate::class::CharClass;
-use crate::engines::{Engine, NFAParser};
-use crate::parser::{self, Parser};
+use crate::class::{CharClass, CharRange};
+use crate::parser::{self, NFAParser, Parser};
 
-use automata::{DFA, NFA};
+use std::convert::TryInto;
+
+use automata::{dfa::Disjoin, nfa::Transition, DFA, NFA};
 
 /// A compiled regular expression for matching strings. It may be used to determine if given
 /// strings are within the language described by the regular expression.
@@ -12,6 +13,35 @@ pub struct RegExp<E: Engine> {
     expr: String,
     /// The compiled backend of the regular expression used to evaluate input strings.
     engine: E,
+}
+
+/// A trait implemented by regular expression backends, used to evaluate input strings.
+pub trait Engine {
+    fn is_exact_match(&self, input: &str) -> bool;
+}
+
+impl Engine for NFA<CharClass> {
+    fn is_exact_match(&self, input: &str) -> bool {
+        self.is_exact_match(input.chars())
+    }
+}
+
+impl PartialEq<char> for CharClass {
+    fn eq(&self, other: &char) -> bool {
+        self.contains(*other)
+    }
+}
+
+impl From<CharClass> for Transition<CharClass> {
+    fn from(c: CharClass) -> Self {
+        Transition::Some(c)
+    }
+}
+
+impl Engine for DFA<CharClass> {
+    fn is_exact_match(&self, input: &str) -> bool {
+        self.is_exact_match(input.chars())
+    }
 }
 
 impl<E: Engine> RegExp<E> {
@@ -46,5 +76,39 @@ impl RegExp<DFA<CharClass>> {
             expr: expr.to_owned(),
             engine: dfa,
         })
+    }
+}
+
+impl Disjoin for CharClass {
+    /// Create a set of disjoint CharClass from a set of CharClass. Algorithm inspired by [this
+    /// Stack Overflow answer](https://stackoverflow.com/a/55482655/8955108).
+    fn disjoin(vec: Vec<&Self>) -> Vec<Self> {
+        let ranges: Vec<_> = vec.iter().flat_map(|cc| cc.ranges.clone()).collect();
+
+        let mut starts: Vec<_> = ranges.iter().map(|r| (r.start as u32, 1)).collect();
+        let mut ends: Vec<_> = ranges.iter().map(|r| (r.end as u32 + 1, -1)).collect();
+        starts.append(&mut ends);
+        starts.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut prev = 0;
+        let mut count = 0;
+        starts
+            .into_iter()
+            .filter_map(|(x, c)| {
+                let ret = if x > prev && count != 0 {
+                    let ret = CharRange::new(prev.try_into().unwrap(), (x - 1).try_into().unwrap());
+                    Some(ret.into())
+                } else {
+                    None
+                };
+                prev = x;
+                count += c;
+                ret
+            })
+            .collect()
+    }
+
+    fn contains(&self, other: &Self) -> bool {
+        !self.intersection(other).is_empty()
     }
 }

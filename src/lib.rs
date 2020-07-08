@@ -7,7 +7,6 @@ mod disjoint;
 mod ranges;
 
 pub mod class;
-pub mod engines;
 pub mod parser;
 
 pub use regexp::*;

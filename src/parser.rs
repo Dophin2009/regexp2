@@ -1,11 +1,211 @@
+use crate::ast::{self, ASTNode};
 use crate::class::{CharClass, CharRange};
 
+use std::convert::{TryFrom, TryInto};
 use std::error;
 use std::fmt;
+use std::hash::Hash;
+use std::marker::PhantomData;
 use std::result;
+
+use automata::{nfa::Transition, NFA};
 
 /// Alias for [std::result::Result] for [ParseError].
 pub type Result<T> = result::Result<T, ParseError>;
+
+/// A regular expression parser that produces an NFA that describes the same language as the
+/// regular expression. The transitions of the NFA must be derivable from CharClass.
+pub struct NFAParser<T>
+where
+    T: Clone + Eq + Hash,
+    Transition<T>: From<CharClass>,
+{
+    _phantom: PhantomData<T>,
+}
+
+impl<T> NFAParser<T>
+where
+    T: Clone + Eq + Hash,
+    Transition<T>: From<CharClass>,
+{
+    /// Create a new NFAParser.
+    pub fn new() -> Self {
+        NFAParser {
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<T> Parser<NFA<T>> for NFAParser<T>
+where
+    T: Clone + Eq + Hash,
+    Transition<T>: From<CharClass>,
+{
+    /// Implement the shift action. A new NFA with two states and a single transition on the given
+    /// character between them is pushed to the parsing stack.
+    fn shift_action(
+        &self,
+        stack: &mut Vec<NFA<T>>,
+        _: &mut Vec<Operator>,
+        c: CharClass,
+    ) -> Result<()> {
+        let transition = c.into();
+
+        let mut nfa = NFA::new();
+        let final_state = nfa.add_state(true);
+        nfa.add_transition(nfa.initial_state, final_state, transition);
+
+        stack.push(nfa);
+
+        Ok(())
+    }
+
+    /// Implement the reduce action for parsing. The most recent operator is popped from the stack
+    /// and sub-NFAs are popped from the NFA stack, and a new NFA is constructed and pushed to the
+    /// stack.
+    fn reduce_action(&self, stack: &mut Vec<NFA<T>>, op_stack: &mut Vec<Operator>) -> Result<()> {
+        // Pop the last operator off.
+        let op = op_stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+        let mut new_nfa: NFA<T>;
+
+        match op {
+            // A union NFA is constructed from the 2 operands of the union operator.
+            Operator::Union => {
+                let c2 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                let c1 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                new_nfa = NFA::union(&c1, &c2);
+            }
+            // A concatenated NFA is constructed from the 2 operands of the concatenation
+            // operator.
+            Operator::Concatenation => {
+                let c2 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                let c1 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                new_nfa = NFA::concatenation(&c1, &c2);
+            }
+            // A new NFA is constructed from the most recent NFA on the stack for kleene star,
+            // plus, and optional operators.
+            Operator::KleeneStar => {
+                let c1 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                new_nfa = NFA::kleene_star(&c1);
+            }
+            Operator::Plus => {
+                let c1 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                let kleene = NFA::kleene_star(&c1);
+                new_nfa = NFA::concatenation(&kleene, &c1);
+            }
+            Operator::Optional => {
+                let c1 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                let c2 = NFA::new_epsilon();
+                new_nfa = NFA::union(&c1, &c2);
+            }
+            // A new NFA with a single epsilon transition is pushed to the stack.
+            Operator::EmptyPlaceholder => {
+                new_nfa = NFA::new();
+                new_nfa.final_states.insert(new_nfa.initial_state);
+            }
+            Operator::LeftParen => return Err(ParseError::UnbalancedParentheses),
+        }
+
+        stack.push(new_nfa);
+        Ok(())
+    }
+}
+
+pub struct ASTParser<T>
+where
+    T: Clone + Eq + Hash + From<CharClass>,
+{
+    _phantom: PhantomData<T>,
+}
+
+impl<T> ASTParser<T>
+where
+    T: Clone + Eq + Hash + From<CharClass>,
+{
+    /// Create a new ASTParser.
+    pub fn new() -> Self {
+        ASTParser {
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<T> Parser<ASTNode<T>> for ASTParser<T>
+where
+    T: Clone + Eq + Hash + From<CharClass>,
+{
+    /// Implement the shift action. A new leaf node is pushed to the parsing stack.
+    fn shift_action(
+        &self,
+        stack: &mut Vec<ASTNode<T>>,
+        _: &mut Vec<Operator>,
+        c: CharClass,
+    ) -> Result<()> {
+        let new_node = ASTNode::Leaf(c.into());
+        stack.push(new_node);
+        Ok(())
+    }
+
+    /// Implement the reduce action for parsing. The most recent operator is popped from the stack
+    /// and child nodes are popped from the node stack, and a new node is constructed and pushed to
+    /// the stack.
+    fn reduce_action(
+        &self,
+        stack: &mut Vec<ASTNode<T>>,
+        op_stack: &mut Vec<Operator>,
+    ) -> Result<()> {
+        // Pop the last operator off.
+        let op = op_stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+
+        let new_node;
+        if op == Operator::EmptyPlaceholder {
+            // A new blank leaf node is pushed to the stack if operator is an empty placeholder.
+            new_node = ASTNode::None;
+        } else {
+            // Otherwise, a new branch node is constructed from operands.
+            let node_op = op
+                .try_into()
+                .map_err(|_| ParseError::UnbalancedParentheses)?;
+            let c1: ASTNode<T>;
+            let c2: ASTNode<T>;
+
+            match node_op {
+                // Union and concatenation branch nodes are constructed from the 2 topmost nodes.
+                ast::Operator::Union | ast::Operator::Concatenation => {
+                    c2 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                    c1 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                }
+                // A new node is constructed from the topmost node on the stack for kleene star,
+                // plus, and optional operators.
+                ast::Operator::KleeneStar | ast::Operator::Plus | ast::Operator::Optional => {
+                    c1 = stack.pop().ok_or(ParseError::UnbalancedOperators)?;
+                    c2 = ASTNode::None;
+                }
+            }
+
+            new_node = ASTNode::Branch(node_op, Box::new(c1), Box::new(c2));
+        }
+
+        stack.push(new_node);
+        Ok(())
+    }
+}
+
+impl TryFrom<Operator> for ast::Operator {
+    type Error = ();
+
+    fn try_from(op: Operator) -> result::Result<Self, Self::Error> {
+        match op {
+            Operator::KleeneStar => Ok(Self::KleeneStar),
+            Operator::Plus => Ok(Self::Plus),
+            Operator::Optional => Ok(Self::Optional),
+            Operator::Concatenation => Ok(Self::Concatenation),
+            Operator::Union => Ok(Self::Union),
+            Operator::EmptyPlaceholder => Err(()),
+            Operator::LeftParen => Err(()),
+        }
+    }
+}
 
 /// Parser implementations must define the shift and reduce actions. The symbols in a regular
 /// expression are iterated through and parsed according to these functions.
