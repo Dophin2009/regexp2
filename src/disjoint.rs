@@ -226,30 +226,3 @@ impl<'a, K, V> From<map::IntoIter<K, V>> for IntoIter<K, V> {
         Self { map_iter }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    impl Intersect for bool {
-        fn intersect(&self, _: &Self) -> bool {
-            false
-        }
-
-        fn union(&self, _: &Self) -> Self {
-            true
-        }
-    }
-
-    impl Priority<u32> for bool {
-        fn priority(&self) -> u32 {
-            0
-        }
-    }
-
-    #[test]
-    fn test_works() {
-        let mut set = DisjointSet::new();
-        set.insert(true);
-    }
-}
