@@ -32,22 +32,22 @@ impl CharClass {
         self.ranges.is_empty()
     }
 
+    // Union of the intersections of each range in `Self` with each range in `other`.
+    pub fn intersection(&self, other: &Self) -> Self {
+        self.iter().fold(CharClass::new(), |mut union, self_r| {
+            let intersections = other
+                .iter()
+                .flat_map(|other_r: &CharRange| self_r.intersection(other_r));
+            union.extend(intersections);
+            union
+        })
+    }
+
     /// Return the complement of the union of the ranges in the character class.
     pub fn complement(&self) -> Self {
         self.iter()
             .map(|r| r.complement().into())
-            // Union of intersection
-            .fold_first(|union: CharClass, complement| {
-                union
-                    .iter()
-                    .flat_map(|ur: &CharRange| -> CharClass {
-                        complement
-                            .iter()
-                            .flat_map(|cr| ur.intersection(cr))
-                            .collect()
-                    })
-                    .collect()
-            })
+            .fold_first(|union: CharClass, complement| union.intersection(&complement))
             .unwrap_or(CharClass::new())
     }
 
