@@ -1,4 +1,3 @@
-#[macro_export]
 macro_rules! hash_set {
     () => {
         std::collections::HashSet::new()

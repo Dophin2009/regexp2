@@ -1,7 +1,8 @@
-use crate::hash_set;
 use crate::table::Table;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
+
+include!("macros.rs");
 
 /// A non-deterministic finite automaton, or NFA.
 #[derive(Debug)]
