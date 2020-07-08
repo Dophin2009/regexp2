@@ -44,7 +44,7 @@ use regexp2::RegExp;
 
 fn main() {
   // Any sequence of a's and b's ending in abb.
-  let mut re = RegExp::new_with_nfa("(a|b)*abb");
+  let mut re = RegExp::new("(a|b)*abb");
   assert!(re.is_exact_match("abb"));
   assert!(re.is_exact_match("aababb"));
 
