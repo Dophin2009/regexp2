@@ -8,6 +8,8 @@ use std::hash::Hash;
 pub trait Disjoin: Sized {
     /// Given a set of transition symbols, return a set of non-overlapping transition symbols.
     fn disjoin(vec: Vec<&Self>) -> Vec<Self>;
+
+    fn contains(&self, other: &Self) -> bool;
 }
 
 /// A deterministic finite automaton, or DFA.
@@ -45,6 +47,121 @@ where
             transition: Table::new(),
         }
     }
+
+    pub fn add_state(&mut self, is_final: bool) -> u32 {
+        let label = self.total_states;
+        self.total_states += 1;
+        if is_final {
+            self.final_states.insert(label);
+        }
+        label
+    }
+
+    pub fn add_transition(&mut self, start: u32, end: u32, label: Transition<T>) -> Option<()> {
+        if self.total_states < start + 1 || self.total_states < end + 1 {
+            None
+        } else {
+            self.transition.set(start, label, end);
+            Some(())
+        }
+    }
+
+    /// Determine if the given input is accepted by the DFA.
+    pub fn is_exact_match<S, I>(&self, input: I) -> bool
+    where
+        T: PartialEq<S>,
+        I: Iterator<Item = S>,
+    {
+        let iter = self.iter_input(input);
+        let final_state = iter.last();
+        match final_state {
+            Some(op_s) => match op_s {
+                Some(s) => self.final_states.contains(&s),
+                None => false,
+            },
+            None => false,
+        }
+    }
+
+    /// Produce a DFAIterator for the DFA on some input iterator. See [DFAIterator].
+    pub fn iter_input<'a, S, I>(&'a self, input: I) -> DFAIterator<'a, T, S, I>
+    where
+        T: PartialEq<S>,
+        I: Iterator<Item = S>,
+    {
+        DFAIterator::new(self, input)
+    }
+}
+
+/// An iterator on DFA states over some input. The values of the input iterator must be able to be
+/// matched to transitions.
+#[derive(Debug)]
+pub struct DFAIterator<'a, T, S, I>
+where
+    T: Clone + Eq + Hash + PartialEq<S>,
+    I: Iterator<Item = S>,
+{
+    input: I,
+    current_state: Option<u32>,
+    dfa: &'a DFA<T>,
+
+    iter_c: u32,
+}
+
+impl<'a, T, S, I> Iterator for DFAIterator<'a, T, S, I>
+where
+    T: Clone + Eq + Hash + PartialEq<S>,
+    I: Iterator<Item = S>,
+{
+    type Item = Option<u32>;
+
+    /// Consume one input sybmol and advance the state of the DFA according to that symbol.
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter_c += 1;
+
+        // On first iter, return initial state
+        if self.iter_c == 1 {
+            return Some(self.current_state);
+        }
+
+        match self.current_state {
+            Some(current_state) => {
+                let c = match self.input.next() {
+                    Some(c) => c,
+                    None => return None,
+                };
+
+                let transitions = self.dfa.transition.get_row(&current_state);
+                self.current_state = match transitions.iter().find(|(&Transition(t), _v)| *t == c) {
+                    Some((_, &&s)) => Some(s),
+                    None => {
+                        self.current_state = None;
+                        return Some(None);
+                    }
+                };
+
+                Some(self.current_state)
+            }
+            None => None,
+        }
+    }
+}
+
+impl<'a, T, S, I> DFAIterator<'a, T, S, I>
+where
+    T: Clone + Eq + Hash + PartialEq<S>,
+    I: Iterator<Item = S>,
+{
+    /// Create a new DFAIterator on the given input for the given DFA.
+    fn new(dfa: &'a DFA<T>, input: I) -> Self {
+        DFAIterator {
+            input,
+            current_state: Some(dfa.inital_state),
+            dfa,
+
+            iter_c: 0,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -61,7 +178,7 @@ impl DState {
 
 impl<T> From<NFA<T>> for DFA<T>
 where
-    T: Clone + Disjoin + Eq + Hash,
+    T: Clone + Disjoin + Eq + Hash + std::fmt::Debug,
 {
     // Create an equivalent DFA from an NFA.
     fn from(nfa: NFA<T>) -> Self {
@@ -69,13 +186,23 @@ where
         let mut marked_states = Vec::new();
         let mut unmarked_states = VecDeque::new();
 
-        let mut label = 0;
-
+        let label = 0;
         let initial_e_closure = nfa.epsilon_closure(nfa.initial_state);
         let initial_unmarked = DState::new(label, initial_e_closure);
+
+        if initial_unmarked
+            .nfa_states
+            .iter()
+            .any(|i| nfa.is_final_state(i))
+        {
+            dfa.final_states.insert(initial_unmarked.label);
+        }
+
         unmarked_states.push_back(initial_unmarked);
 
         while let Some(s) = unmarked_states.pop_front() {
+            println!("{:?}\n", s);
+
             // Get all non-epsilon transitions and destinations from the NFA states in this set
             // state.
             let transition_map: Vec<(&T, &HashSet<u32>)> = s
@@ -95,11 +222,12 @@ where
             let transitions: Vec<&T> = transition_map.iter().map(|(t, _)| *t).collect();
             // Disjoin transitions.
             let disjoint_transitions = T::disjoin(transitions);
+            println!("{:?}\n", disjoint_transitions);
 
             for t in disjoint_transitions {
                 let moved_set: HashSet<u32> = transition_map
                     .iter()
-                    .filter(|(a, _)| **a == t)
+                    .filter(|(a, _)| a.contains(&t))
                     .flat_map(|(_, v)| (*v).clone())
                     .collect();
                 let epsilon_closure = nfa.epsilon_closure_set(&moved_set);
@@ -107,40 +235,32 @@ where
 
                 // If state already exists in unmarked or marked, change the label and do not push
                 // to unmarked.
-                let mut push_unmarked = false;
-                if s.nfa_states != new_state.nfa_states {
+                if s.nfa_states == new_state.nfa_states {
                     new_state.label = s.label;
+                    dfa.add_transition(s.label, new_state.label, Transition(t));
                 } else if let Some(existing) = marked_states
                     .iter()
                     .find(|ss: &&DState| ss.nfa_states == new_state.nfa_states)
                 {
                     new_state.label = existing.label;
+                    dfa.add_transition(s.label, new_state.label, Transition(t));
                 } else if let Some(existing) = unmarked_states
                     .iter()
                     .find(|ss: &&DState| ss.nfa_states == new_state.nfa_states)
                 {
                     new_state.label = existing.label;
+                    dfa.add_transition(s.label, new_state.label, Transition(t));
                 } else {
                     // If not found, set a new label and push to unmarked.
-                    label += 1;
-                    new_state.label = label;
+                    new_state.label = dfa.add_state(false);
 
                     // If this set state contains an accepting NFA state, set this set state
                     // as accepting in the DFA.
-                    if new_state
-                        .nfa_states
-                        .iter()
-                        .any(|i| nfa.final_states.contains(i))
-                    {
+                    if new_state.nfa_states.iter().any(|i| nfa.is_final_state(i)) {
                         dfa.final_states.insert(new_state.label);
                     }
 
-                    push_unmarked = true;
-                }
-
-                dfa.transition.set(s.label, Transition(t), new_state.label);
-
-                if push_unmarked {
+                    dfa.add_transition(s.label, new_state.label, Transition(t));
                     unmarked_states.push_back(new_state);
                 }
             }
@@ -148,6 +268,8 @@ where
             // Mark this state
             marked_states.push(s);
         }
+
+        println!("{:#?}", dfa);
 
         dfa
     }

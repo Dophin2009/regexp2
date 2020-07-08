@@ -191,6 +191,10 @@ where
         self.add_transition(start, end, Transition::Epsilon)
     }
 
+    pub fn is_final_state(&self, label: &u32) -> bool {
+        self.final_states.contains(label)
+    }
+
     /// Computes the function epsilon-closure for some given state in the NFA. Returns the set of
     /// all states accessible from the given state on epsilon transitions only.
     pub fn epsilon_closure(&self, state: u32) -> HashSet<u32> {

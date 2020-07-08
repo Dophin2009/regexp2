@@ -1,6 +1,8 @@
-use crate::class::CharClass;
+use crate::class::{CharClass, CharRange};
+use crate::dfa::{Disjoin, DFA};
 use crate::nfa::{Transition, NFA};
 use crate::parser::{self, Operator, ParseError, Parser};
+use std::convert::TryInto;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
@@ -157,5 +159,56 @@ where
 
         stack.push(new_nfa);
         Ok(())
+    }
+}
+
+impl RegExp<DFA<CharClass>> {
+    pub fn new_with_dfa(expr: &str) -> parser::Result<Self> {
+        let parser = NFAParser::new();
+        let nfa: NFA<CharClass> = parser.parse(expr)?.unwrap();
+        let dfa = nfa.into();
+
+        Ok(RegExp {
+            expr: expr.to_owned(),
+            engine: dfa,
+        })
+    }
+}
+
+impl Engine for DFA<CharClass> {
+    fn is_exact_match(&self, input: &str) -> bool {
+        self.is_exact_match(input.chars())
+    }
+}
+
+impl Disjoin for CharClass {
+    fn disjoin(vec: Vec<&Self>) -> Vec<Self> {
+        let ranges: Vec<_> = vec.iter().flat_map(|cc| cc.ranges.clone()).collect();
+
+        let mut starts: Vec<_> = ranges.iter().map(|r| (r.start as u32, 1)).collect();
+        let mut ends: Vec<_> = ranges.iter().map(|r| (r.end as u32 + 1, -1)).collect();
+        starts.append(&mut ends);
+        starts.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut prev = 0;
+        let mut count = 0;
+        starts
+            .into_iter()
+            .filter_map(|(x, c)| {
+                let ret = if x > prev && count != 0 {
+                    let ret = CharRange::new(prev.try_into().unwrap(), (x - 1).try_into().unwrap());
+                    Some(ret.into())
+                } else {
+                    None
+                };
+                prev = x;
+                count += c;
+                ret
+            })
+            .collect()
+    }
+
+    fn contains(&self, other: &Self) -> bool {
+        !self.intersection(other).is_empty()
     }
 }
