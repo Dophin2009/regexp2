@@ -1,4 +1,5 @@
 #![feature(iterator_fold_self)]
+#![feature(type_alias_impl_trait)]
 
 mod regexp;
 

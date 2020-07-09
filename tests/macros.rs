@@ -7,14 +7,14 @@ macro_rules! run_tests {
             let dfa_re = RegExp::new_with_dfa(expr).unwrap();
             $valids.iter().for_each(|s| {
                 assert!(
-                    nfa_re.is_exact_match(s),
+                    nfa_re.is_match(s),
                     r#""{}" failed to match "{}" using nfa"#,
                     expr,
                     s
                 );
 
                 assert!(
-                    dfa_re.is_exact_match(s),
+                    dfa_re.is_match(s),
                     r#""{}" failed to match "{}" using dfa"#,
                     expr,
                     s
@@ -22,14 +22,14 @@ macro_rules! run_tests {
             });
             $invalids.iter().for_each(|s| {
                 assert_eq!(
-                    nfa_re.is_exact_match(s),
+                    nfa_re.is_match(s),
                     false,
                     r#""{}" matched "{}" using nfa"#,
                     expr,
                     s
                 );
                 assert_eq!(
-                    dfa_re.is_exact_match(s),
+                    dfa_re.is_match(s),
                     false,
                     r#""{}" matched "{}" using dfa"#,
                     expr,
