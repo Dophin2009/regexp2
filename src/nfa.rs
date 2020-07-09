@@ -1,4 +1,6 @@
+use crate::matching::Match;
 use crate::table::Table;
+
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
@@ -196,6 +198,11 @@ where
         self.final_states.contains(label)
     }
 
+    /// Returns the transitions and destinations from a specific state.
+    pub fn transitions_from(&self, state: u32) -> HashMap<&Transition<T>, &HashSet<u32>> {
+        self.transition.get_row(&state)
+    }
+
     /// Computes the function epsilon-closure for some given state in the NFA. Returns the set of
     /// all states accessible from the given state on epsilon transitions only.
     pub fn epsilon_closure(&self, state: u32) -> HashSet<u32> {
@@ -219,9 +226,24 @@ where
         set
     }
 
-    /// Returns the transitions and destinations from a specific state.
-    pub fn transitions_from(&self, state: u32) -> HashMap<&Transition<T>, &HashSet<u32>> {
-        self.transition.get_row(&state)
+    fn move_set<S>(&self, state_set: &HashSet<u32>, input: &S) -> HashSet<u32>
+    where
+        T: PartialEq<S>,
+    {
+        let mut set = HashSet::new();
+        for state in state_set.iter() {
+            let transitions = self.transitions_from(*state);
+            let input_transitions = transitions
+                .into_iter()
+                .filter(|(t, _)| match *t {
+                    Transition::Some(symbol) => *symbol == *input,
+                    Transition::Epsilon => false,
+                })
+                .flat_map(|(_, dest)| dest.into_iter().map(|&i| i))
+                .collect();
+            set = set.union(&input_transitions).map(|&i| i).collect();
+        }
+        set
     }
 }
 
@@ -241,101 +263,100 @@ impl<T> NFA<T>
 where
     T: Clone + Eq + Hash,
 {
-    /// Produces an NFAIterator for the NFA on some input iterator. See [NFAIterator].
-    pub fn iter_input<'a, S, I>(&'a self, input: I) -> NFAIterator<'a, T, S, I>
-    where
-        T: PartialEq<S>,
-        I: Iterator<Item = S>,
-    {
-        NFAIterator::new(self, input)
-    }
-
     /// Determines if the given input is accepted by the NFA.
-    pub fn is_exact_match<'a, S, I>(&self, input: I) -> bool
+    pub fn is_match<I>(&self, input: &I) -> bool
     where
-        T: PartialEq<S>,
-        I: Iterator<Item = S>,
+        T: PartialEq<I::Item>,
+        I: Clone + IntoIterator,
     {
-        let iter = self.iter_input(input);
-        let final_set = iter.last();
-        match final_set {
-            Some(set) => set.iter().any(|s| self.final_states.contains(s)),
-            None => false,
+        let mut state_set = self.epsilon_closure(self.initial_state);
+
+        for is in input.clone().into_iter() {
+            let moved_set = self.move_set(&state_set, &is);
+            state_set = self.epsilon_closure_set(&moved_set);
         }
+
+        state_set.iter().any(|s| self.is_final_state(s))
     }
-}
 
-/// An iterator on NFA states over some input. The values of the input
-/// iterator must be able to be matched to transitions.
-#[derive(Debug)]
-pub struct NFAIterator<'a, T, S, I>
-where
-    T: Clone + Eq + Hash + PartialEq<S>,
-    I: Iterator<Item = S>,
-{
-    input: I,
-    state_set: HashSet<u32>,
-    nfa: &'a NFA<T>,
+    pub fn has_match<I>(&self, input: &I) -> bool
+    where
+        T: PartialEq<I::Item>,
+        I: Clone + IntoIterator,
+    {
+        self.has_match_at(input, 0)
+    }
 
-    iter_c: u32,
-}
+    pub fn has_match_at<I>(&self, input: &I, start: usize) -> bool
+    where
+        T: PartialEq<I::Item>,
+        I: Clone + IntoIterator,
+    {
+        self.find_shortest_at(input, start).is_some()
+    }
 
-impl<'a, T, S, I> Iterator for NFAIterator<'a, T, S, I>
-where
-    T: Clone + Eq + Hash + PartialEq<S>,
-    I: Iterator<Item = S>,
-{
-    type Item = HashSet<u32>;
+    pub fn find_shortest<I>(&self, input: &I) -> Option<Match>
+    where
+        T: PartialEq<I::Item>,
+        I: Clone + IntoIterator,
+    {
+        self.find_shortest_at(input, 0)
+    }
 
-    /// Consumes one input symbol and advances the state of the NFA according to that symbol.
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter_c += 1;
-        if self.iter_c == 1 {
-            return Some(self.state_set.clone());
-        }
+    pub fn find_shortest_at<I>(&self, input: &I, start: usize) -> Option<Match>
+    where
+        T: PartialEq<I::Item>,
+        I: Clone + IntoIterator,
+    {
+        self._find_at(input, start, true)
+    }
 
-        let c = match self.input.next() {
-            Some(c) => c,
-            None => return None,
+    pub fn find<I>(&self, input: &I) -> Option<Match>
+    where
+        T: PartialEq<I::Item>,
+        I: Clone + IntoIterator,
+    {
+        self.find_at(input, 0)
+    }
+
+    pub fn find_at<I>(&self, input: &I, start: usize) -> Option<Match>
+    where
+        T: PartialEq<I::Item>,
+        I: Clone + IntoIterator,
+    {
+        self._find_at(input, start, false)
+    }
+
+    fn _find_at<I>(&self, input: &I, start: usize, shortest: bool) -> Option<Match>
+    where
+        T: PartialEq<I::Item>,
+        I: Clone + IntoIterator,
+    {
+        let mut last_match = if self.is_final_state(&self.initial_state) {
+            Some(Match::new(start, start))
+        } else {
+            None
         };
 
-        let moved_set = self.move_set(&self.state_set, &c);
-        self.state_set = self.nfa.epsilon_closure_set(&moved_set);
-
-        Some(self.state_set.clone())
-    }
-}
-
-impl<'a, T, S, I> NFAIterator<'a, T, S, I>
-where
-    T: Clone + Eq + Hash + PartialEq<S>,
-    I: Iterator<Item = S>,
-{
-    /// Create a new NFAIterator on the given input for the given NFA.
-    fn new(nfa: &'a NFA<T>, input: I) -> Self {
-        NFAIterator {
-            input,
-            state_set: nfa.epsilon_closure(nfa.initial_state),
-            nfa,
-            iter_c: 0,
+        if shortest && last_match.is_some() {
+            return last_match;
         }
-    }
 
-    fn move_set(&self, state_set: &HashSet<u32>, input: &S) -> HashSet<u32> {
-        let mut set = HashSet::new();
-        for state in state_set.iter() {
-            let transitions = self.nfa.transitions_from(*state);
-            let input_transitions = transitions
-                .into_iter()
-                .filter(|(t, _)| match *t {
-                    Transition::Some(symbol) => *symbol == *input,
-                    Transition::Epsilon => false,
-                })
-                .flat_map(|(_, dest)| dest.into_iter().map(|&i| i))
-                .collect();
-            set = set.union(&input_transitions).map(|&i| i).collect();
+        let mut state_set = self.epsilon_closure(self.initial_state);
+
+        let input = input.clone().into_iter().skip(start);
+        for (i, is) in input.enumerate() {
+            let moved_set = self.move_set(&state_set, &is);
+            state_set = self.epsilon_closure_set(&moved_set);
+            if state_set.iter().any(|s| self.is_final_state(s)) {
+                last_match = Some(Match::new(start, i));
+                if shortest {
+                    break;
+                }
+            }
         }
-        set
+
+        last_match
     }
 }
 

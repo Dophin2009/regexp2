@@ -1,5 +1,7 @@
+use crate::matching::Match;
 use crate::nfa::{self, NFA};
 use crate::table::Table;
+
 use std::collections::{HashSet, VecDeque};
 use std::hash::Hash;
 
@@ -66,101 +68,117 @@ where
         }
     }
 
+    pub fn is_final_state(&self, state: &u32) -> bool {
+        self.final_states.iter().any(|s| s == state)
+    }
+}
+
+impl<T> DFA<T>
+where
+    T: Clone + Eq + Hash,
+{
     /// Determine if the given input is accepted by the DFA.
-    pub fn is_exact_match<S, I>(&self, input: I) -> bool
+    pub fn is_match<I>(&self, input: &I) -> bool
     where
-        T: PartialEq<S>,
-        I: Iterator<Item = S>,
+        T: PartialEq<I::Item>,
+        I: Clone + IntoIterator,
     {
-        let iter = self.iter_input(input);
-        let final_state = iter.last();
-        match final_state {
-            Some(op_s) => match op_s {
-                Some(s) => self.final_states.contains(&s),
-                None => false,
-            },
-            None => false,
-        }
-    }
+        let mut state = self.inital_state;
 
-    /// Produce a DFAIterator for the DFA on some input iterator. See [DFAIterator].
-    pub fn iter_input<'a, S, I>(&'a self, input: I) -> DFAIterator<'a, T, S, I>
-    where
-        T: PartialEq<S>,
-        I: Iterator<Item = S>,
-    {
-        DFAIterator::new(self, input)
-    }
-}
-
-/// An iterator on DFA states over some input. The values of the input iterator must be able to be
-/// matched to transitions.
-#[derive(Debug)]
-pub struct DFAIterator<'a, T, S, I>
-where
-    T: Clone + Eq + Hash + PartialEq<S>,
-    I: Iterator<Item = S>,
-{
-    input: I,
-    current_state: Option<u32>,
-    dfa: &'a DFA<T>,
-
-    iter_c: u32,
-}
-
-impl<'a, T, S, I> Iterator for DFAIterator<'a, T, S, I>
-where
-    T: Clone + Eq + Hash + PartialEq<S>,
-    I: Iterator<Item = S>,
-{
-    type Item = Option<u32>;
-
-    /// Consume one input sybmol and advance the state of the DFA according to that symbol.
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter_c += 1;
-
-        // On first iter, return initial state
-        if self.iter_c == 1 {
-            return Some(self.current_state);
-        }
-
-        match self.current_state {
-            Some(current_state) => {
-                let c = match self.input.next() {
-                    Some(c) => c,
-                    None => return None,
-                };
-
-                let transitions = self.dfa.transition.get_row(&current_state);
-                self.current_state = match transitions.iter().find(|(&Transition(t), _v)| *t == c) {
-                    Some((_, &&s)) => Some(s),
-                    None => {
-                        self.current_state = None;
-                        return Some(None);
-                    }
-                };
-
-                Some(self.current_state)
+        for is in input.clone().into_iter() {
+            let transitions = self.transition.get_row(&state);
+            state = match transitions.iter().find(|(&Transition(t), _)| *t == is) {
+                Some((_, &&s)) => s,
+                // No transition on current symbol from current state: no match.
+                None => return false,
             }
-            None => None,
         }
+
+        self.is_final_state(&state)
     }
-}
 
-impl<'a, T, S, I> DFAIterator<'a, T, S, I>
-where
-    T: Clone + Eq + Hash + PartialEq<S>,
-    I: Iterator<Item = S>,
-{
-    /// Create a new DFAIterator on the given input for the given DFA.
-    fn new(dfa: &'a DFA<T>, input: I) -> Self {
-        DFAIterator {
-            input,
-            current_state: Some(dfa.inital_state),
-            dfa,
+    pub fn has_match<I>(&self, input: &I) -> bool
+    where
+        T: PartialEq<I::Item>,
+        I: Clone + IntoIterator,
+    {
+        self.has_match_at(input, 0)
+    }
 
-            iter_c: 0,
+    pub fn has_match_at<I>(&self, input: &I, start: usize) -> bool
+    where
+        T: PartialEq<I::Item>,
+        I: Clone + IntoIterator,
+    {
+        self.find_shortest_at(input, start).is_some()
+    }
+
+    pub fn find_shortest<I>(&self, input: &I) -> Option<Match>
+    where
+        T: PartialEq<I::Item>,
+        I: Clone + IntoIterator,
+    {
+        self.find_shortest_at(input, 0)
+    }
+
+    pub fn find_shortest_at<I>(&self, input: &I, start: usize) -> Option<Match>
+    where
+        T: PartialEq<I::Item>,
+        I: Clone + IntoIterator,
+    {
+        self._find_at(input, start, true)
+    }
+
+    pub fn find<I>(&self, input: &I) -> Option<Match>
+    where
+        T: PartialEq<I::Item>,
+        I: Clone + IntoIterator,
+    {
+        self.find_at(input, 0)
+    }
+
+    pub fn find_at<I>(&self, input: &I, start: usize) -> Option<Match>
+    where
+        T: PartialEq<I::Item>,
+        I: Clone + IntoIterator,
+    {
+        self._find_at(input, start, false)
+    }
+
+    fn _find_at<I>(&self, input: &I, start: usize, shortest: bool) -> Option<Match>
+    where
+        T: PartialEq<I::Item>,
+        I: Clone + IntoIterator,
+    {
+        let mut state = self.inital_state;
+        let mut last_match = if self.is_final_state(&state) {
+            Some(Match::new(start, start))
+        } else {
+            None
+        };
+
+        if shortest && last_match.is_some() {
+            return last_match;
         }
+
+        let input = input.clone().into_iter().skip(start);
+        for (i, is) in input.enumerate() {
+            let transitions = self.transition.get_row(&state);
+            state = match transitions.iter().find(|(&Transition(t), _)| *t == is) {
+                Some((_, &&s)) => s,
+                // No transition on current symbol from current state: no match.
+                None => break,
+            };
+
+            if self.is_final_state(&state) {
+                last_match = Some(Match::new(start, i));
+                if shortest {
+                    break;
+                }
+            }
+        }
+
+        last_match
     }
 }
 
