@@ -2,7 +2,7 @@ use crate::matching::Match;
 use crate::nfa::{self, NFA};
 use crate::table::Table;
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 
 /// Must be implemented by NFA transition symbol types to ensure each DFA state has only one
@@ -29,6 +29,15 @@ where
     pub final_states: HashSet<u32>,
     /// A lookup table for transitions between states.
     pub transition: Table<u32, Transition<T>, u32>,
+}
+
+#[derive(Debug)]
+pub struct DFAFromNFA<T>
+where
+    T: Clone + Eq + Hash,
+{
+    pub dfa: DFA<T>,
+    pub nfa_mapping: HashMap<u32, HashSet<u32>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -198,11 +207,32 @@ impl<T> From<NFA<T>> for DFA<T>
 where
     T: Clone + Disjoin + Eq + Hash,
 {
+    fn from(nfa: NFA<T>) -> Self {
+        let dfa_from_nfa: DFAFromNFA<T> = nfa.into();
+        dfa_from_nfa.into()
+    }
+}
+
+impl<T> From<DFAFromNFA<T>> for DFA<T>
+where
+    T: Clone + Disjoin + Eq + Hash,
+{
+    fn from(dfa_from_nfa: DFAFromNFA<T>) -> Self {
+        dfa_from_nfa.dfa
+    }
+}
+
+impl<T> From<NFA<T>> for DFAFromNFA<T>
+where
+    T: Clone + Disjoin + Eq + Hash,
+{
     // Create an equivalent DFA from an NFA using the subset construction described by Algorithm
     // 3.20. The construction is slightly modified, with inspiration from [this Stack Overflow
     //   answer](https://stackoverflow.com/a/25832898/8955108) to accomodate character ranges.
     fn from(nfa: NFA<T>) -> Self {
         let mut dfa = DFA::new();
+        let mut nfa_mapping = HashMap::new();
+
         let mut marked_states = Vec::new();
         let mut unmarked_states = VecDeque::new();
 
@@ -218,6 +248,7 @@ where
             dfa.final_states.insert(initial_unmarked.label);
         }
 
+        nfa_mapping.insert(initial_unmarked.label, initial_unmarked.nfa_states.clone());
         unmarked_states.push_back(initial_unmarked);
 
         while let Some(s) = unmarked_states.pop_front() {
@@ -278,6 +309,7 @@ where
                     }
 
                     dfa.add_transition(s.label, new_state.label, Transition(t));
+                    nfa_mapping.insert(new_state.label, new_state.nfa_states.clone());
                     unmarked_states.push_back(new_state);
                 }
             }
@@ -286,6 +318,6 @@ where
             marked_states.push(s);
         }
 
-        dfa
+        DFAFromNFA { dfa, nfa_mapping }
     }
 }
