@@ -45,17 +45,17 @@ use regexp2::RegExp;
 fn main() {
   // Any sequence of a's and b's ending in abb.
   let mut re = RegExp::new("(a|b)*abb");
-  assert!(re.is_exact_match("abb"));
-  assert!(re.is_exact_match("aababb"));
+  assert!(re.is_match("abb"));
+  assert!(re.is_match("aababb"));
 
   // Any sequence of characters that are not B, C, D, E, F or any lowercase letter.
   re = RegExp::new_with_dfa("[^B-Fa-z]*");
-  assert!(re.is_exact_match("AGAQR"));
+  assert!(re.is_match("AGAQR"));
 
   // Any sequence of at least one digit followed by nothing or an alphanumeric or underscore.
   re = RegExp::new_with_dfa("\d+\w?");
-  assert!(re.is_exact_match("3a"));
-  assert!(re.is_exact_match("08m"));
-  assert!(re.is_exact_match("999_"));
+  assert!(re.is_match("3a"));
+  assert!(re.is_match("08m"));
+  assert!(re.is_match("999_"));
 }
 ```
