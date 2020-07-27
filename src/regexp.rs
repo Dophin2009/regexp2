@@ -115,11 +115,11 @@ impl Engine for DFA<CharClass> {
     }
 
     fn find_shortest_at(&self, input: &str, start: usize) -> Option<Match> {
-        DFA::find_shortest_at(self, &input.chars(), start)
+        DFA::find_shortest_at(self, &input.chars(), start).and_then(|(m, _)| Some(m))
     }
 
     fn find_at(&self, input: &str, start: usize) -> Option<Match> {
-        DFA::find_at(self, &input.chars(), start)
+        DFA::find_at(self, &input.chars(), start).and_then(|(m, _)| Some(m))
     }
 }
 
