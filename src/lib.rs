@@ -1,8 +1,8 @@
 mod matching;
-mod table;
 
 pub mod dfa;
 pub mod nfa;
+pub mod table;
 
 pub use dfa::DFA;
 pub use matching::Match;

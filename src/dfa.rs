@@ -122,7 +122,7 @@ where
         self.find_shortest_at(input, start).is_some()
     }
 
-    pub fn find_shortest<I>(&self, input: &I) -> Option<Match>
+    pub fn find_shortest<I>(&self, input: &I) -> Option<(Match, u32)>
     where
         T: PartialEq<I::Item>,
         I: Clone + IntoIterator,
@@ -130,7 +130,7 @@ where
         self.find_shortest_at(input, 0)
     }
 
-    pub fn find_shortest_at<I>(&self, input: &I, start: usize) -> Option<Match>
+    pub fn find_shortest_at<I>(&self, input: &I, start: usize) -> Option<(Match, u32)>
     where
         T: PartialEq<I::Item>,
         I: Clone + IntoIterator,
@@ -138,7 +138,7 @@ where
         self._find_at(input, start, true)
     }
 
-    pub fn find<I>(&self, input: &I) -> Option<Match>
+    pub fn find<I>(&self, input: &I) -> Option<(Match, u32)>
     where
         T: PartialEq<I::Item>,
         I: Clone + IntoIterator,
@@ -146,7 +146,7 @@ where
         self.find_at(input, 0)
     }
 
-    pub fn find_at<I>(&self, input: &I, start: usize) -> Option<Match>
+    pub fn find_at<I>(&self, input: &I, start: usize) -> Option<(Match, u32)>
     where
         T: PartialEq<I::Item>,
         I: Clone + IntoIterator,
@@ -154,7 +154,7 @@ where
         self._find_at(input, start, false)
     }
 
-    fn _find_at<I>(&self, input: &I, start: usize, shortest: bool) -> Option<Match>
+    fn _find_at<I>(&self, input: &I, start: usize, shortest: bool) -> Option<(Match, u32)>
     where
         T: PartialEq<I::Item>,
         I: Clone + IntoIterator,
@@ -167,7 +167,7 @@ where
         };
 
         if shortest && last_match.is_some() {
-            return last_match;
+            return last_match.map(|m| (m, state));
         }
 
         let input = input.clone().into_iter().skip(start);
@@ -187,7 +187,7 @@ where
             }
         }
 
-        last_match
+        last_match.and_then(|m| Some((m, state)))
     }
 }
 
