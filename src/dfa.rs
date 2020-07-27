@@ -21,7 +21,7 @@ where
     T: Clone + Eq + Hash,
 {
     /// A DFA has a single initial state.
-    pub inital_state: u32,
+    pub initial_state: u32,
     /// The number of total states in the DFA. There is a state labeled i for every i where 0 <= i
     /// < total_states.
     pub total_states: u32,
@@ -52,7 +52,7 @@ where
     /// Create a new DFA with a single initial state.
     pub fn new() -> Self {
         Self {
-            inital_state: 0,
+            initial_state: 0,
             total_states: 1,
             final_states: HashSet::new(),
             transition: Table::new(),
@@ -92,7 +92,7 @@ where
         T: PartialEq<I::Item>,
         I: Clone + IntoIterator,
     {
-        let mut state = self.inital_state;
+        let mut state = self.initial_state;
 
         for is in input.clone().into_iter() {
             let transitions = self.transition.get_row(&state);
@@ -159,7 +159,7 @@ where
         T: PartialEq<I::Item>,
         I: Clone + IntoIterator,
     {
-        let mut state = self.inital_state;
+        let mut state = self.initial_state;
         let mut last_match = if self.is_final_state(&state) {
             Some(Match::new(start, start))
         } else {
