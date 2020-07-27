@@ -41,7 +41,7 @@ where
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct Transition<T>(T)
+pub struct Transition<T>(pub T)
 where
     T: Clone + Eq + Hash;
 
