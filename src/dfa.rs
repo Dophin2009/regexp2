@@ -180,7 +180,7 @@ where
             };
 
             if self.is_final_state(&state) {
-                last_match = Some(Match::new(start, i));
+                last_match = Some(Match::new(start, i + 1));
                 if shortest {
                     break;
                 }

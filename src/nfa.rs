@@ -349,7 +349,7 @@ where
             let moved_set = self.move_set(&state_set, &is);
             state_set = self.epsilon_closure_set(&moved_set);
             if state_set.iter().any(|s| self.is_final_state(s)) {
-                last_match = Some(Match::new(start, i));
+                last_match = Some(Match::new(start, i + 1));
                 if shortest {
                     break;
                 }
