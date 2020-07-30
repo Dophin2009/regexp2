@@ -1,7 +1,6 @@
 use std::iter;
 
-use tree::map;
-use tree::Map;
+use tree::{map, Map};
 
 pub trait Intersect {
     fn intersect(&self, other: &Self) -> bool;
