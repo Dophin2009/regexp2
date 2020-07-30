@@ -21,14 +21,14 @@ where
     T: Clone + Eq + Hash,
 {
     /// A DFA has a single initial state.
-    pub initial_state: u32,
+    pub initial_state: usize,
     /// The number of total states in the DFA. There is a state labeled i for every i where 0 <= i
     /// < total_states.
-    pub total_states: u32,
+    pub total_states: usize,
     /// The set of accepting states.
-    pub final_states: HashSet<u32>,
+    pub final_states: HashSet<usize>,
     /// A lookup table for transitions between states.
-    pub transition: Table<u32, Transition<T>, u32>,
+    pub transition: Table<usize, Transition<T>, usize>,
 }
 
 #[derive(Debug)]
@@ -37,7 +37,7 @@ where
     T: Clone + Eq + Hash,
 {
     pub dfa: DFA<T>,
-    pub nfa_mapping: HashMap<u32, HashSet<u32>>,
+    pub nfa_mapping: HashMap<usize, HashSet<usize>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -59,7 +59,7 @@ where
         }
     }
 
-    pub fn add_state(&mut self, is_final: bool) -> u32 {
+    pub fn add_state(&mut self, is_final: bool) -> usize {
         let label = self.total_states;
         self.total_states += 1;
         if is_final {
@@ -68,7 +68,7 @@ where
         label
     }
 
-    pub fn add_transition(&mut self, start: u32, end: u32, label: Transition<T>) -> Option<()> {
+    pub fn add_transition(&mut self, start: usize, end: usize, label: Transition<T>) -> Option<()> {
         if self.total_states < start + 1 || self.total_states < end + 1 {
             None
         } else {
@@ -77,7 +77,7 @@ where
         }
     }
 
-    pub fn is_final_state(&self, state: &u32) -> bool {
+    pub fn is_final_state(&self, state: &usize) -> bool {
         self.final_states.iter().any(|s| s == state)
     }
 }
@@ -122,7 +122,7 @@ where
         self.find_shortest_at(input, start).is_some()
     }
 
-    pub fn find_shortest<I>(&self, input: &I) -> Option<(Match, u32)>
+    pub fn find_shortest<I>(&self, input: &I) -> Option<(Match, usize)>
     where
         T: PartialEq<I::Item>,
         I: Clone + IntoIterator,
@@ -130,7 +130,7 @@ where
         self.find_shortest_at(input, 0)
     }
 
-    pub fn find_shortest_at<I>(&self, input: &I, start: usize) -> Option<(Match, u32)>
+    pub fn find_shortest_at<I>(&self, input: &I, start: usize) -> Option<(Match, usize)>
     where
         T: PartialEq<I::Item>,
         I: Clone + IntoIterator,
@@ -138,7 +138,7 @@ where
         self._find_at(input, start, true)
     }
 
-    pub fn find<I>(&self, input: &I) -> Option<(Match, u32)>
+    pub fn find<I>(&self, input: &I) -> Option<(Match, usize)>
     where
         T: PartialEq<I::Item>,
         I: Clone + IntoIterator,
@@ -146,7 +146,7 @@ where
         self.find_at(input, 0)
     }
 
-    pub fn find_at<I>(&self, input: &I, start: usize) -> Option<(Match, u32)>
+    pub fn find_at<I>(&self, input: &I, start: usize) -> Option<(Match, usize)>
     where
         T: PartialEq<I::Item>,
         I: Clone + IntoIterator,
@@ -154,7 +154,7 @@ where
         self._find_at(input, start, false)
     }
 
-    fn _find_at<I>(&self, input: &I, start: usize, shortest: bool) -> Option<(Match, u32)>
+    fn _find_at<I>(&self, input: &I, start: usize, shortest: bool) -> Option<(Match, usize)>
     where
         T: PartialEq<I::Item>,
         I: Clone + IntoIterator,
@@ -193,12 +193,12 @@ where
 
 #[derive(Clone, Debug)]
 struct DState {
-    label: u32,
-    nfa_states: HashSet<u32>,
+    label: usize,
+    nfa_states: HashSet<usize>,
 }
 
 impl DState {
-    fn new(label: u32, nfa_states: HashSet<u32>) -> Self {
+    fn new(label: usize, nfa_states: HashSet<usize>) -> Self {
         DState { label, nfa_states }
     }
 }
@@ -254,7 +254,7 @@ where
         while let Some(s) = unmarked_states.pop_front() {
             // Get all non-epsilon transitions and destinations from the NFA states in this set
             // state.
-            let transition_map: Vec<(&T, &HashSet<u32>)> = s
+            let transition_map: Vec<(&T, &HashSet<usize>)> = s
                 .clone()
                 .nfa_states
                 .into_iter()
@@ -273,7 +273,7 @@ where
             let disjoint_transitions = T::disjoin(transitions);
 
             for t in disjoint_transitions {
-                let moved_set: HashSet<u32> = transition_map
+                let moved_set: HashSet<usize> = transition_map
                     .iter()
                     .filter(|(a, _)| a.contains(&t))
                     .flat_map(|(_, v)| (*v).clone())

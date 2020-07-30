@@ -10,14 +10,14 @@ include!("macros.rs");
 #[derive(Debug)]
 pub struct NFA<T: Clone + Eq + Hash> {
     /// An NFA has a single initial state.
-    pub initial_state: u32,
+    pub initial_state: usize,
     /// The number of total states in the NFA. There is a state labeled i for every i where 0 <= i
     /// < total_states.
-    pub total_states: u32,
+    pub total_states: usize,
     /// The set of accepting states.
-    pub final_states: HashSet<u32>,
+    pub final_states: HashSet<usize>,
     /// A lookup table for transitions between states.
-    pub transition: Table<u32, Transition<T>, HashSet<u32>>,
+    pub transition: Table<usize, Transition<T>, HashSet<usize>>,
 }
 
 /// A transition between states in an NFA.
@@ -162,7 +162,7 @@ where
 
     /// Add a state to the NFA. The label of the state is returned. The total number of states is
     /// always greater than the label of the newest state by 1.
-    pub fn add_state(&mut self, is_final: bool) -> u32 {
+    pub fn add_state(&mut self, is_final: bool) -> usize {
         let label = self.total_states;
         if is_final {
             self.final_states.insert(label);
@@ -173,7 +173,7 @@ where
     }
 
     /// Add a transition. Returns None if one or more of the states does not exist.
-    pub fn add_transition(&mut self, start: u32, end: u32, label: Transition<T>) -> Option<()> {
+    pub fn add_transition(&mut self, start: usize, end: usize, label: Transition<T>) -> Option<()> {
         if self.total_states < start + 1 || self.total_states < end + 1 {
             None
         } else {
@@ -185,27 +185,27 @@ where
     }
 
     // Add a non-epsilon transition. See [add_transition].
-    pub fn add_labeled_transition(&mut self, start: u32, end: u32, label: T) -> Option<()> {
+    pub fn add_labeled_transition(&mut self, start: usize, end: usize, label: T) -> Option<()> {
         self.add_transition(start, end, Transition::Some(label))
     }
 
     // Add an epsilon transition. See [add_transition].
-    pub fn add_epsilon_transition(&mut self, start: u32, end: u32) -> Option<()> {
+    pub fn add_epsilon_transition(&mut self, start: usize, end: usize) -> Option<()> {
         self.add_transition(start, end, Transition::Epsilon)
     }
 
-    pub fn is_final_state(&self, label: &u32) -> bool {
+    pub fn is_final_state(&self, label: &usize) -> bool {
         self.final_states.contains(label)
     }
 
     /// Returns the transitions and destinations from a specific state.
-    pub fn transitions_from(&self, state: u32) -> HashMap<&Transition<T>, &HashSet<u32>> {
+    pub fn transitions_from(&self, state: usize) -> HashMap<&Transition<T>, &HashSet<usize>> {
         self.transition.get_row(&state)
     }
 
     /// Computes the function epsilon-closure for some given state in the NFA. Returns the set of
     /// all states accessible from the given state on epsilon transitions only.
-    pub fn epsilon_closure(&self, state: u32) -> HashSet<u32> {
+    pub fn epsilon_closure(&self, state: usize) -> HashSet<usize> {
         let transitions = self.transitions_from(state);
         let mut closure: HashSet<_> = transitions
             .into_iter()
@@ -217,7 +217,7 @@ where
     }
 
     /// Computes the union of epsilon-closures for each state in the given set of states.
-    pub fn epsilon_closure_set(&self, state_set: &HashSet<u32>) -> HashSet<u32> {
+    pub fn epsilon_closure_set(&self, state_set: &HashSet<usize>) -> HashSet<usize> {
         let mut set = state_set.clone();
         for state in state_set.iter() {
             let state_closure = self.epsilon_closure(*state);
@@ -226,7 +226,7 @@ where
         set
     }
 
-    fn move_set<S>(&self, state_set: &HashSet<u32>, input: &S) -> HashSet<u32>
+    fn move_set<S>(&self, state_set: &HashSet<usize>, input: &S) -> HashSet<usize>
     where
         T: PartialEq<S>,
     {
