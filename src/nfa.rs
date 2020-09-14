@@ -35,6 +35,7 @@ where
     T: Clone + Eq + Hash,
 {
     /// Create a new NFA with a single initial state.
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         NFA {
             initial_state: 0,
@@ -144,7 +145,7 @@ where
 
     /// Construct a new NFA with epsilon transitions from the initial state to the initial states
     /// of each child. The final states of the new NFA are the final states of the children.
-    pub fn combine(cc: &Vec<&NFA<T>>) -> NFA<T> {
+    pub fn combine(cc: &[&NFA<T>]) -> NFA<T> {
         let mut new_nfa = NFA::new();
         let mut offset = new_nfa.total_states;
         for c in cc {
@@ -210,7 +211,7 @@ where
         let mut closure: HashSet<_> = transitions
             .into_iter()
             .filter(|(t, _)| **t == Transition::Epsilon)
-            .flat_map(|(_, dest)| dest.into_iter().flat_map(|&i| self.epsilon_closure(i)))
+            .flat_map(|(_, dest)| dest.iter().flat_map(|&i| self.epsilon_closure(i)))
             .collect();
         closure.insert(state);
         closure
@@ -221,7 +222,7 @@ where
         let mut set = state_set.clone();
         for state in state_set.iter() {
             let state_closure = self.epsilon_closure(*state);
-            set = set.union(&state_closure).map(|&i| i).collect();
+            set = set.union(&state_closure).cloned().collect();
         }
         set
     }
@@ -239,9 +240,9 @@ where
                     Transition::Some(symbol) => *symbol == *input,
                     Transition::Epsilon => false,
                 })
-                .flat_map(|(_, dest)| dest.into_iter().map(|&i| i))
+                .flat_map(|(_, dest)| dest.iter().cloned())
                 .collect();
-            set = set.union(&input_transitions).map(|&i| i).collect();
+            set = set.union(&input_transitions).cloned().collect();
         }
         set
     }

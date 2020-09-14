@@ -23,7 +23,23 @@ where
             map: HashMap::new(),
         }
     }
+}
 
+impl<T, U, V> Default for Table<T, U, V>
+where
+    T: Eq + Hash,
+    U: Eq + Hash,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T, U, V> Table<T, U, V>
+where
+    T: Eq + Hash,
+    U: Eq + Hash,
+{
     /// Set the value in the table with the given keys.
     pub fn set(&mut self, row: T, col: U, val: V) -> Option<V> {
         match self.map.get_mut(&row) {

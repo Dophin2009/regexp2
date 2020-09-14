@@ -58,7 +58,21 @@ where
             transition: Table::new(),
         }
     }
+}
 
+impl<T> Default for DFA<T>
+where
+    T: Clone + Eq + Hash,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T> DFA<T>
+where
+    T: Clone + Eq + Hash,
+{
     pub fn add_state(&mut self, is_final: bool) -> usize {
         let label = self.total_states;
         self.total_states += 1;
@@ -187,7 +201,7 @@ where
             }
         }
 
-        last_match.and_then(|m| Some((m, state)))
+        last_match.map(|m| (m, state))
     }
 }
 
