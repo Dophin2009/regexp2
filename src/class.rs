@@ -49,7 +49,7 @@ impl CharClass {
         self.iter()
             .map(|r| r.complement().into())
             .fold_first(|union: CharClass, complement| union.intersection(&complement))
-            .unwrap_or(CharClass::new())
+            .unwrap_or_else(CharClass::new)
     }
 
     /// Copy the ranges in `other` to this `Self`.
@@ -114,6 +114,12 @@ impl CharClass {
     }
 }
 
+impl Default for CharClass {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl From<CharRange> for CharClass {
     /// Create a character class with a single range.
     fn from(range: CharRange) -> Self {
@@ -141,7 +147,7 @@ impl From<Vec<CharRange>> for CharClass {
 impl From<Vec<char>> for CharClass {
     fn from(vec: Vec<char>) -> Self {
         let mut class = CharClass::new();
-        class.extend(vec.into_iter().map(|c| CharRange::from(c)));
+        class.extend(vec.into_iter().map(CharRange::from));
         class
     }
 }

@@ -36,6 +36,16 @@ where
     }
 }
 
+impl<T> Default for NFAParser<T>
+where
+    T: Clone + Eq + Hash,
+    Transition<T>: From<CharClass>,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> Parser<NFA<T>> for NFAParser<T>
 where
     T: Clone + Eq + Hash,
@@ -127,6 +137,15 @@ where
         ASTParser {
             _phantom: PhantomData,
         }
+    }
+}
+
+impl<T> Default for ASTParser<T>
+where
+    T: Clone + Eq + Hash + From<CharClass>,
+{
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -381,10 +400,8 @@ where
                         // If escaped, handle this as literal \
                         state.escaped = false;
                         state.handle_literal_char(c)?;
-                    } else if state.in_char_class {
-                        // If unescaped and in char class, handle next.
-                        state.escaped = true;
                     } else {
+                        // If unescaped and in char class, handle next.
                         // If unescaped and not in char class, handle next.
                         state.escaped = true;
                     }
@@ -485,7 +502,7 @@ where
             next = chars.next();
         }
 
-        if expr.len() == 0 {
+        if expr.is_empty() {
             state.op_stack.push(Operator::EmptyPlaceholder);
         }
 
@@ -844,8 +861,6 @@ impl fmt::Display for ParseError {
 
 impl error::Error for ParseError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match *self {
-            _ => None,
-        }
+        None
     }
 }

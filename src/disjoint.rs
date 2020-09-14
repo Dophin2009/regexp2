@@ -39,6 +39,16 @@ where
     }
 }
 
+impl<K, V> Default for DisjointSet<K, V>
+where
+    K: Clone + Ord,
+    V: Intersect + Priority<K>,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<K, V> From<Vec<V>> for DisjointSet<K, V>
 where
     K: Clone + Ord,
@@ -87,7 +97,7 @@ where
     }
 
     pub fn remove(&mut self, priority: K) -> Option<V> {
-        self.tree.remove(&priority).and_then(|(_, v)| Some(v))
+        self.tree.remove(&priority).map(|(_, v)| v)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -180,7 +190,7 @@ impl<'a, K, V> Iterator for Iter<'a, K, V> {
     type Item = &'a V;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.map_iter.next().and_then(|(_, v)| Some(v))
+        self.map_iter.next().map(|(_, v)| v)
     }
 }
 
@@ -198,7 +208,7 @@ impl<'a, K, V> Iterator for IterMut<'a, K, V> {
     type Item = &'a mut V;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.map_iter.next().and_then(|(_, v)| Some(v))
+        self.map_iter.next().map(|(_, v)| v)
     }
 }
 
@@ -216,7 +226,7 @@ impl<K, V> Iterator for IntoIter<K, V> {
     type Item = V;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.map_iter.next().and_then(|(_, v)| Some(v))
+        self.map_iter.next().map(|(_, v)| v)
     }
 }
 
