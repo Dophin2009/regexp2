@@ -15,7 +15,7 @@ pub trait Disjoin: Sized {
 }
 
 /// A deterministic finite automaton, or DFA.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DFA<T>
 where
     T: Clone + Eq + Hash,
