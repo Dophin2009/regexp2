@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Match {
     start: usize,
     end: usize,
