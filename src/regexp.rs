@@ -3,7 +3,8 @@ use crate::parser::{self, NFAParser, Parser};
 
 use std::convert::TryInto;
 
-use automata::{dfa::Disjoin, nfa::Transition, Match, DFA, NFA};
+pub use automata::Match;
+use automata::{dfa::Disjoin, nfa::Transition, DFA, NFA};
 
 /// A compiled regular expression for matching strings. It may be used to determine if given
 /// strings are within the language described by the regular expression.
