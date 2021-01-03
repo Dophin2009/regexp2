@@ -1,5 +1,3 @@
-#![feature(iterator_fold_self)]
-
 mod regexp;
 
 mod ast;
