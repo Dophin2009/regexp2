@@ -46,9 +46,15 @@ impl CharClass {
 
     /// Return the complement of the union of the ranges in the character class.
     pub fn complement(&self) -> Self {
-        self.iter()
-            .map(|r| r.complement().into())
-            .fold_first(|union: CharClass, complement| union.intersection(&complement))
+        let mut it = self.iter().map(|r| r.complement().into());
+
+        // fold_first
+        it.next()
+            .map(|complement| {
+                it.fold(complement, |union: CharClass, complement| {
+                    union.intersection(&complement)
+                })
+            })
             .unwrap_or_else(CharClass::new)
     }
 
