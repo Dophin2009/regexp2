@@ -1,35 +1,29 @@
 # RegExp2
 
-This is the second attempt at a regular expression parser and matcher.
-The code `regexp2` is significantly less spaghetti and more flexible
-than that of [`regexp`](../regexp). More operators and syntax are
-supported.
+This is the second attempt at a regular expression parser and matcher. The code
+`regexp2` is significantly less spaghetti and more flexible than that of
+[`regexp`](../regexp). More operators and syntax are supported.
 
-Currently, NFA and DFA backends is supported. DFAs are constructed by
-converting from NFAs. A similar, but more generic parsing algorithm to
-that of `regexp` is used, and the equivalent NFA of a regular expression
-is created using the subset construction described in Algorithm 3.23 in
-*Compilers: Principles, Techniques, and Tool, Second Edition*.
+Currently, NFA and DFA backends is supported. DFAs are constructed by converting
+from NFAs. A similar, but more generic parsing algorithm to that of `regexp` is
+used, and the equivalent NFA of a regular expression is created using the subset
+construction described in Algorithm 3.23 in *Compilers: Principles, Techniques,
+and Tool, Second Edition*.
 
 ## Usage
-
-This crate uses the `iterator_fold_self` feature, so the nightly
-toolchain is required.
 
 The following operators are supported:
 
 -   `*` : the Kleene star
--   `+` : the "plus" operator, where `a+` is equivalent to `aa*` or
-    `a*a`
+-   `+` : the "plus" operator, where `a+` is equivalent to `aa*` or `a*a`
 -   `?` : the optional operator
 -   `|` : the union operator
 -   `(` and `)` : grouping
 -   \\ : escaping meta-characters
--   `[abc]`, `[a-z]`, `[A-Z0-9]` : character classes with character
-    ranges
+-   `[abc]`, `[a-z]`, `[A-Z0-9]` : character classes with character ranges
 -   `[^abc]` : negation of character classes
--   `\d`, `\D` : all Unicode decimal number characters and all
-    non-decimal number characters, respectively
+-   `\d`, `\D` : all Unicode decimal number characters and all non-decimal
+    number characters, respectively
 -   `\w`, `\W` : all word characters (alphanumeric and `_`) and non-word
     characters, respectively
 -   `\s`, `\S` : all whitespace (equivalent to
