@@ -1,3 +1,5 @@
+#![deny(rust_2018_idioms)]
+
 mod matching;
 
 pub mod dfa;
