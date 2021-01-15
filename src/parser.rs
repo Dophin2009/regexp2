@@ -850,7 +850,7 @@ pub enum ParseError {
 }
 
 impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt<'a>(&self, f: &mut fmt::Formatter<'a>) -> fmt::Result {
         match *self {
             Self::UnbalancedOperators => write!(f, "unbalanced operators"),
             Self::UnbalancedParentheses => write!(f, "unbalanced parentheses"),

@@ -175,11 +175,11 @@ impl iter::FromIterator<CharRange> for CharClass {
 }
 
 impl CharClass {
-    pub fn iter(&self) -> CharClassIter {
+    pub fn iter<'a>(&'a self) -> CharClassIter<'a> {
         self.ranges.iter().into()
     }
 
-    pub fn iter_mut(&mut self) -> CharClassIterMut {
+    pub fn iter_mut<'a>(&'a mut self) -> CharClassIterMut<'a> {
         self.ranges.iter_mut().into()
     }
 }

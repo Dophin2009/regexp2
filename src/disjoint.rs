@@ -110,11 +110,11 @@ where
     K: Clone + Ord,
     V: Intersect + Priority<K>,
 {
-    pub fn iter(&self) -> Iter<K, V> {
+    pub fn iter<'a>(&'a self) -> Iter<'a, K, V> {
         self.tree.iter().into()
     }
 
-    pub fn iter_mut(&mut self) -> IterMut<K, V> {
+    pub fn iter_mut<'a>(&'a mut self) -> IterMut<'a, K, V> {
         self.tree.iter_mut().into()
     }
 }
