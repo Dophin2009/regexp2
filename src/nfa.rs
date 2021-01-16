@@ -383,8 +383,8 @@ where
                     .into_iter()
                     .map(|rc| match Rc::try_unwrap(rc) {
                         Ok(v) => v,
-                        // Shouldn't ever panic?
-                        Err(_) => panic!(),
+                        // Shouldn't ever have any lingering references.
+                        Err(_) => unreachable!(),
                     })
                     .collect(),
             )
