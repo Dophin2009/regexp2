@@ -31,19 +31,19 @@ impl<E: Engine> RegExp<E> {
         self.find_shortest_at(input, start).is_some()
     }
 
-    pub fn find(&self, input: &str) -> Option<Match> {
+    pub fn find(&self, input: &str) -> Option<Match<char>> {
         self.find_at(input, 0)
     }
 
-    pub fn find_at(&self, input: &str, start: usize) -> Option<Match> {
+    pub fn find_at(&self, input: &str, start: usize) -> Option<Match<char>> {
         self.engine.find_at(input, start)
     }
 
-    pub fn find_shortest(&self, input: &str) -> Option<Match> {
+    pub fn find_shortest(&self, input: &str) -> Option<Match<char>> {
         self.find_shortest_at(input, 0)
     }
 
-    pub fn find_shortest_at(&self, input: &str, start: usize) -> Option<Match> {
+    pub fn find_shortest_at(&self, input: &str, start: usize) -> Option<Match<char>> {
         self.engine.find_shortest_at(input, start)
     }
 }
@@ -91,36 +91,36 @@ impl From<CharClass> for Transition<CharClass> {
 pub trait Engine {
     fn is_match(&self, input: &str) -> bool;
 
-    fn find_at(&self, input: &str, start: usize) -> Option<Match>;
+    fn find_at(&self, input: &str, start: usize) -> Option<Match<char>>;
 
-    fn find_shortest_at(&self, input: &str, start: usize) -> Option<Match>;
+    fn find_shortest_at(&self, input: &str, start: usize) -> Option<Match<char>>;
 }
 
 impl Engine for NFA<CharClass> {
     fn is_match(&self, input: &str) -> bool {
-        NFA::is_match(self, &input.chars())
+        NFA::is_match(self, input.chars())
     }
 
-    fn find_shortest_at(&self, input: &str, start: usize) -> Option<Match> {
-        NFA::find_shortest_at(self, &input.chars(), start)
+    fn find_shortest_at(&self, input: &str, start: usize) -> Option<Match<char>> {
+        NFA::find_shortest_at(self, input.chars(), start)
     }
 
-    fn find_at(&self, input: &str, start: usize) -> Option<Match> {
-        NFA::find_at(self, &input.chars(), start)
+    fn find_at(&self, input: &str, start: usize) -> Option<Match<char>> {
+        NFA::find_at(self, input.chars(), start)
     }
 }
 
 impl Engine for DFA<CharClass> {
     fn is_match(&self, input: &str) -> bool {
-        DFA::is_match(self, &input.chars())
+        DFA::is_match(self, input.chars())
     }
 
-    fn find_shortest_at(&self, input: &str, start: usize) -> Option<Match> {
-        DFA::find_shortest_at(self, &input.chars(), start).map(|(m, _)| m)
+    fn find_shortest_at(&self, input: &str, start: usize) -> Option<Match<char>> {
+        DFA::find_shortest_at(self, input.chars(), start).map(|(m, _)| m)
     }
 
-    fn find_at(&self, input: &str, start: usize) -> Option<Match> {
-        DFA::find_at(self, &input.chars(), start).map(|(m, _)| m)
+    fn find_at(&self, input: &str, start: usize) -> Option<Match<char>> {
+        DFA::find_at(self, input.chars(), start).map(|(m, _)| m)
     }
 }
 
