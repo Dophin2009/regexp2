@@ -1,8 +1,11 @@
 use crate::matching::Match;
 use crate::table::Table;
 
-use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
+use std::{
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 
 include!("macros.rs");
 
@@ -265,14 +268,14 @@ where
     T: Clone + Eq + Hash,
 {
     /// Determines if the given input is accepted by the NFA.
-    pub fn is_match<I>(&self, input: &I) -> bool
+    pub fn is_match<I>(&self, input: I) -> bool
     where
         T: PartialEq<I::Item>,
-        I: Clone + IntoIterator,
+        I: IntoIterator,
     {
         let mut state_set = self.epsilon_closure(self.initial_state);
 
-        for is in input.clone().into_iter() {
+        for is in input.into_iter() {
             let moved_set = self.move_set(&state_set, &is);
             state_set = self.epsilon_closure_set(&moved_set);
         }
@@ -280,83 +283,111 @@ where
         state_set.iter().any(|s| self.is_final_state(s))
     }
 
-    pub fn has_match<I>(&self, input: &I) -> bool
+    pub fn has_match<I>(&self, input: I) -> bool
     where
         T: PartialEq<I::Item>,
-        I: Clone + IntoIterator,
+        I: IntoIterator,
     {
         self.has_match_at(input, 0)
     }
 
-    pub fn has_match_at<I>(&self, input: &I, start: usize) -> bool
+    pub fn has_match_at<I>(&self, input: I, start: usize) -> bool
     where
         T: PartialEq<I::Item>,
-        I: Clone + IntoIterator,
+        I: IntoIterator,
     {
         self.find_shortest_at(input, start).is_some()
     }
 
-    pub fn find_shortest<I>(&self, input: &I) -> Option<Match>
+    pub fn find_shortest<'a, I>(&self, input: I) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
-        I: Clone + IntoIterator,
+        I: IntoIterator,
     {
         self.find_shortest_at(input, 0)
     }
 
-    pub fn find_shortest_at<I>(&self, input: &I, start: usize) -> Option<Match>
+    pub fn find_shortest_at<'a, I>(&self, input: I, start: usize) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
-        I: Clone + IntoIterator,
+        I: IntoIterator,
     {
         self._find_at(input, start, true)
     }
 
-    pub fn find<I>(&self, input: &I) -> Option<Match>
+    pub fn find<'a, I>(&self, input: I) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
-        I: Clone + IntoIterator,
+        I: IntoIterator,
     {
         self.find_at(input, 0)
     }
 
-    pub fn find_at<I>(&self, input: &I, start: usize) -> Option<Match>
+    pub fn find_at<'a, I>(&self, input: I, start: usize) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
-        I: Clone + IntoIterator,
+        I: IntoIterator,
     {
         self._find_at(input, start, false)
     }
 
-    fn _find_at<I>(&self, input: &I, start: usize, shortest: bool) -> Option<Match>
+    fn _find_at<'a, I>(&self, input: I, start: usize, shortest: bool) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
-        I: Clone + IntoIterator,
+        I: IntoIterator,
     {
+        struct MatchRc<T> {
+            start: usize,
+            end: usize,
+            span: Vec<Rc<T>>,
+        }
+
+        impl<T> MatchRc<T> {
+            fn new(start: usize, end: usize, span: Vec<Rc<T>>) -> Self {
+                Self { start, end, span }
+            }
+        }
+
         let mut last_match = if self.is_final_state(&self.initial_state) {
-            Some(Match::new(start, start))
+            Some(MatchRc::new(start, start, vec![]))
         } else {
             None
         };
 
-        if shortest && last_match.is_some() {
-            return last_match;
-        }
+        if !(shortest && last_match.is_some()) {
+            let mut state_set = self.epsilon_closure(self.initial_state);
 
-        let mut state_set = self.epsilon_closure(self.initial_state);
+            let input = input.into_iter().skip(start);
+            let mut span = Vec::new();
+            for (i, is) in input.enumerate() {
+                let moved_set = self.move_set(&state_set, &is);
+                state_set = self.epsilon_closure_set(&moved_set);
 
-        let input = input.clone().into_iter().skip(start);
-        for (i, is) in input.enumerate() {
-            let moved_set = self.move_set(&state_set, &is);
-            state_set = self.epsilon_closure_set(&moved_set);
-            if state_set.iter().any(|s| self.is_final_state(s)) {
-                last_match = Some(Match::new(start, i + 1));
-                if shortest {
-                    break;
+                let is_rc = Rc::new(is);
+                span.push(is_rc);
+
+                if state_set.iter().any(|s| self.is_final_state(s)) {
+                    last_match = Some(MatchRc::new(start, i + 1, span.clone()));
+                    if shortest {
+                        break;
+                    }
                 }
             }
         }
 
-        last_match
+        last_match.map(|m: MatchRc<I::Item>| {
+            Match::new(
+                m.start,
+                m.end,
+                m.span
+                    .into_iter()
+                    .map(|rc| match Rc::try_unwrap(rc) {
+                        Ok(v) => v,
+                        // Shouldn't ever panic?
+                        Err(_) => panic!(),
+                    })
+                    .collect(),
+            )
+        })
     }
 }

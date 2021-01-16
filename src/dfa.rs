@@ -2,8 +2,11 @@ use crate::matching::Match;
 use crate::nfa::{self, NFA};
 use crate::table::Table;
 
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::hash::Hash;
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    rc::Rc,
+};
+use std::{hash::Hash, iter::Peekable};
 
 /// Must be implemented by NFA transition symbol types to ensure each DFA state has only one
 /// possible transition on any symbol.
@@ -96,19 +99,31 @@ where
     }
 }
 
+struct MatchRc<T> {
+    start: usize,
+    end: usize,
+    span: Vec<Rc<T>>,
+}
+
+impl<T> MatchRc<T> {
+    fn new(start: usize, end: usize, span: Vec<Rc<T>>) -> Self {
+        Self { start, end, span }
+    }
+}
+
 impl<T> DFA<T>
 where
     T: Clone + Eq + Hash,
 {
     /// Determine if the given input is accepted by the DFA.
-    pub fn is_match<I>(&self, input: &I) -> bool
+    pub fn is_match<I>(&self, input: I) -> bool
     where
         T: PartialEq<I::Item>,
-        I: Clone + IntoIterator,
+        I: IntoIterator,
     {
         let mut state = self.initial_state;
 
-        for is in input.clone().into_iter() {
+        for is in input.into_iter() {
             let transitions = self.transition.get_row(&state);
             state = match transitions.iter().find(|(&Transition(t), _)| *t == is) {
                 Some((_, &&s)) => s,
@@ -120,88 +135,211 @@ where
         self.is_final_state(&state)
     }
 
-    pub fn has_match<I>(&self, input: &I) -> bool
+    pub fn has_match<I>(&self, input: I) -> bool
     where
         T: PartialEq<I::Item>,
-        I: Clone + IntoIterator,
+        I: IntoIterator,
     {
         self.has_match_at(input, 0)
     }
 
-    pub fn has_match_at<I>(&self, input: &I, start: usize) -> bool
+    pub fn has_match_at<'a, I>(&self, input: I, start: usize) -> bool
     where
         T: PartialEq<I::Item>,
-        I: Clone + IntoIterator,
+        I: IntoIterator,
     {
         self.find_shortest_at(input, start).is_some()
     }
 
-    pub fn find_shortest<I>(&self, input: &I) -> Option<(Match, usize)>
+    pub fn find_shortest<'a, I>(&self, input: I) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
-        I: Clone + IntoIterator,
+        I: IntoIterator,
     {
         self.find_shortest_at(input, 0)
     }
 
-    pub fn find_shortest_at<I>(&self, input: &I, start: usize) -> Option<(Match, usize)>
+    pub fn find_shortest_at<'a, I>(&self, input: I, start: usize) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
-        I: Clone + IntoIterator,
+        I: IntoIterator,
     {
         self._find_at(input, start, true)
     }
 
-    pub fn find<I>(&self, input: &I) -> Option<(Match, usize)>
+    pub fn find<'a, I>(&self, input: I) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
-        I: Clone + IntoIterator,
+        I: IntoIterator,
     {
         self.find_at(input, 0)
     }
 
-    pub fn find_at<I>(&self, input: &I, start: usize) -> Option<(Match, usize)>
+    pub fn find_at<'a, I>(&self, input: I, start: usize) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
-        I: Clone + IntoIterator,
+        I: IntoIterator,
     {
         self._find_at(input, start, false)
     }
 
-    fn _find_at<I>(&self, input: &I, start: usize, shortest: bool) -> Option<(Match, usize)>
+    fn _find_at<'a, I>(
+        &self,
+        input: I,
+        start: usize,
+        shortest: bool,
+    ) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
-        I: Clone + IntoIterator,
+        I: IntoIterator,
     {
         let mut state = self.initial_state;
         let mut last_match = if self.is_final_state(&state) {
-            Some(Match::new(start, start))
+            Some(MatchRc::new(start, start, vec![]))
         } else {
             None
         };
 
-        if shortest && last_match.is_some() {
-            return last_match.map(|m| (m, state));
-        }
+        if !(shortest && last_match.is_some()) {
+            let input = input.into_iter().skip(start);
+            let mut span = Vec::new();
+            for (i, is) in input.enumerate() {
+                let transitions = self.transition.get_row(&state);
+                state = match transitions.iter().find(|(&Transition(t), _)| *t == is) {
+                    Some((_, &&s)) => s,
+                    // No transition on current symbol from current state: no match.
+                    None => break,
+                };
 
-        let input = input.clone().into_iter().skip(start);
-        for (i, is) in input.enumerate() {
-            let transitions = self.transition.get_row(&state);
-            state = match transitions.iter().find(|(&Transition(t), _)| *t == is) {
-                Some((_, &&s)) => s,
-                // No transition on current symbol from current state: no match.
-                None => break,
-            };
+                let is_rc = Rc::new(is);
+                span.push(is_rc);
 
-            if self.is_final_state(&state) {
-                last_match = Some(Match::new(start, i + 1));
-                if shortest {
-                    break;
+                if self.is_final_state(&state) {
+                    last_match = Some(MatchRc::new(start, i + 1, span.clone()));
+                    if shortest {
+                        break;
+                    }
                 }
             }
         }
 
-        last_match.map(|m| (m, state))
+        last_match.map(|m| {
+            let mt = Match::new(
+                m.start,
+                m.end,
+                m.span
+                    .into_iter()
+                    .map(|rc| match Rc::try_unwrap(rc) {
+                        Ok(v) => v,
+                        // Shouldn't ever panic?
+                        Err(_) => panic!(),
+                    })
+                    .collect(),
+            );
+            (mt, state)
+        })
+    }
+
+    pub fn find_shortest_mut<'a, I>(
+        &self,
+        input: &mut Peekable<I>,
+    ) -> Option<(Match<I::Item>, usize)>
+    where
+        T: PartialEq<I::Item>,
+        I: Iterator + std::fmt::Debug,
+        I::Item: std::fmt::Debug,
+    {
+        self._find_mut(input, true)
+    }
+
+    pub fn find_mut<'a, I>(&self, input: &mut Peekable<I>) -> Option<(Match<I::Item>, usize)>
+    where
+        T: PartialEq<I::Item>,
+        I: Iterator + std::fmt::Debug,
+        I::Item: std::fmt::Debug,
+    {
+        self._find_mut(input, false)
+    }
+
+    fn _find_mut<'a, I>(
+        &self,
+        input: &mut Peekable<I>,
+        shortest: bool,
+    ) -> Option<(Match<I::Item>, usize)>
+    where
+        T: PartialEq<I::Item>,
+        I: Iterator + std::fmt::Debug,
+        I::Item: std::fmt::Debug,
+    {
+        let mut state = self.initial_state;
+        let mut last_match = if self.is_final_state(&state) {
+            Some(MatchRc::new(0, 0, vec![]))
+        } else {
+            None
+        };
+
+        if !(shortest && last_match.is_some()) {
+            let mut span = Vec::new();
+
+            // enumerate() does not work?
+            let mut i = 0;
+            loop {
+                // Peek the next symbol to check if a transition on it exists.
+                // If there's no transition, break and do not consume that symbol.
+                // If there is a transition, consume the symbol and push it to the span.
+                // println!("{:?}", input);
+                let is_next = match input.peek() {
+                    Some(tup) => tup,
+                    None => break,
+                };
+
+                // println!("peek: {:?}", is_next);
+
+                // Find the transition (if it exists) from the current state for the next symbol.
+                let transitions = self.transition.get_row(&state);
+                state = match transitions
+                    .iter()
+                    .find(|(&Transition(t), _)| *t == *is_next)
+                {
+                    // Transition found, change the current state to the new state.
+                    Some((_, &&s)) => s,
+                    // No transition on next symbol from current state: no further match to be
+                    // found.
+                    None => break,
+                };
+
+                // Actually consume the next symbol from the iterator and push it to the span.
+                let is = input.next().unwrap();
+                i += 1;
+
+                // println!("consume: {:?}", is);
+                let is_rc = Rc::new(is);
+                span.push(is_rc);
+
+                if self.is_final_state(&state) {
+                    last_match = Some(MatchRc::new(0, i + 1, span.clone()));
+                    if shortest {
+                        break;
+                    }
+                }
+            }
+        }
+
+        last_match.map(|m| {
+            let mt = Match::new(
+                m.start,
+                m.end,
+                m.span
+                    .into_iter()
+                    .map(|rc| match Rc::try_unwrap(rc) {
+                        Ok(v) => v,
+                        // Shouldn't ever panic?
+                        Err(_) => panic!(),
+                    })
+                    .collect(),
+            );
+            (mt, state)
+        })
     }
 }
 
