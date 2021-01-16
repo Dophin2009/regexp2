@@ -246,8 +246,7 @@ where
     ) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
-        I: Iterator + std::fmt::Debug,
-        I::Item: std::fmt::Debug,
+        I: Iterator,
     {
         self._find_mut(input, true)
     }
@@ -255,8 +254,7 @@ where
     pub fn find_mut<'a, I>(&self, input: &mut Peekable<I>) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
-        I: Iterator + std::fmt::Debug,
-        I::Item: std::fmt::Debug,
+        I: Iterator,
     {
         self._find_mut(input, false)
     }
@@ -268,8 +266,7 @@ where
     ) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
-        I: Iterator + std::fmt::Debug,
-        I::Item: std::fmt::Debug,
+        I: Iterator,
     {
         let mut state = self.initial_state;
         let mut last_match = if self.is_final_state(&state) {
@@ -287,13 +284,10 @@ where
                 // Peek the next symbol to check if a transition on it exists.
                 // If there's no transition, break and do not consume that symbol.
                 // If there is a transition, consume the symbol and push it to the span.
-                // println!("{:?}", input);
                 let is_next = match input.peek() {
                     Some(tup) => tup,
                     None => break,
                 };
-
-                // println!("peek: {:?}", is_next);
 
                 // Find the transition (if it exists) from the current state for the next symbol.
                 let transitions = self.transition.get_row(&state);
@@ -312,7 +306,6 @@ where
                 let is = input.next().unwrap();
                 i += 1;
 
-                // println!("consume: {:?}", is);
                 let is_rc = Rc::new(is);
                 span.push(is_rc);
 
