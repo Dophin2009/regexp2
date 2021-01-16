@@ -1,0 +1,23 @@
+[package]
+name = "tree"
+version = "0.4.1"
+authors = ["Andrew Paseltiner <apaseltiner@gmail.com>"]
+license = "MIT/Apache-2.0"
+readme = "README.md"
+homepage = "https://github.com/apasel422/tree"
+repository = "https://github.com/apasel422/tree"
+documentation = "https://apasel422.github.io/tree/tree"
+keywords = ["collection", "data-structure"]
+description = "An ordered map and set based on a binary search tree."
+
+[features]
+default = ["ordered_iter", "quickcheck"]
+range = []
+
+[dependencies]
+compare = "0.0.6"
+quickcheck = { version = "0.2", optional = true }
+ordered_iter = { version = "0.1", optional = true }
+
+[dev-dependencies]
+quickcheck = "0.2"
