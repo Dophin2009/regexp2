@@ -2,11 +2,10 @@ use crate::matching::Match;
 use crate::nfa::{self, NFA};
 use crate::table::Table;
 
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    rc::Rc,
-};
-use std::{hash::Hash, iter::Peekable};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::hash::Hash;
+use std::iter::Peekable;
+use std::rc::Rc;
 
 /// Must be implemented by NFA transition symbol types to ensure each DFA state has only one
 /// possible transition on any symbol.
