@@ -299,7 +299,7 @@ where
         self.find_shortest_at(input, start).is_some()
     }
 
-    pub fn find_shortest<'a, I>(&self, input: I) -> Option<Match<I::Item>>
+    pub fn find_shortest<I>(&self, input: I) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
         I: IntoIterator,
@@ -307,7 +307,7 @@ where
         self.find_shortest_at(input, 0)
     }
 
-    pub fn find_shortest_at<'a, I>(&self, input: I, start: usize) -> Option<Match<I::Item>>
+    pub fn find_shortest_at<I>(&self, input: I, start: usize) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
         I: IntoIterator,
@@ -315,7 +315,7 @@ where
         self._find_at(input, start, true)
     }
 
-    pub fn find<'a, I>(&self, input: I) -> Option<Match<I::Item>>
+    pub fn find<I>(&self, input: I) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
         I: IntoIterator,
@@ -323,7 +323,7 @@ where
         self.find_at(input, 0)
     }
 
-    pub fn find_at<'a, I>(&self, input: I, start: usize) -> Option<Match<I::Item>>
+    pub fn find_at<I>(&self, input: I, start: usize) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
         I: IntoIterator,
@@ -331,7 +331,7 @@ where
         self._find_at(input, start, false)
     }
 
-    fn _find_at<'a, I>(&self, input: I, start: usize, shortest: bool) -> Option<Match<I::Item>>
+    fn _find_at<I>(&self, input: I, start: usize, shortest: bool) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
         I: IntoIterator,

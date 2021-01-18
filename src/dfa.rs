@@ -142,7 +142,7 @@ where
         self.has_match_at(input, 0)
     }
 
-    pub fn has_match_at<'a, I>(&self, input: I, start: usize) -> bool
+    pub fn has_match_at<I>(&self, input: I, start: usize) -> bool
     where
         T: PartialEq<I::Item>,
         I: IntoIterator,
@@ -150,7 +150,7 @@ where
         self.find_shortest_at(input, start).is_some()
     }
 
-    pub fn find_shortest<'a, I>(&self, input: I) -> Option<(Match<I::Item>, usize)>
+    pub fn find_shortest<I>(&self, input: I) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
         I: IntoIterator,
@@ -158,7 +158,7 @@ where
         self.find_shortest_at(input, 0)
     }
 
-    pub fn find_shortest_at<'a, I>(&self, input: I, start: usize) -> Option<(Match<I::Item>, usize)>
+    pub fn find_shortest_at<I>(&self, input: I, start: usize) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
         I: IntoIterator,
@@ -166,7 +166,7 @@ where
         self._find_at(input, start, true)
     }
 
-    pub fn find<'a, I>(&self, input: I) -> Option<(Match<I::Item>, usize)>
+    pub fn find<I>(&self, input: I) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
         I: IntoIterator,
@@ -174,7 +174,7 @@ where
         self.find_at(input, 0)
     }
 
-    pub fn find_at<'a, I>(&self, input: I, start: usize) -> Option<(Match<I::Item>, usize)>
+    pub fn find_at<I>(&self, input: I, start: usize) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
         I: IntoIterator,
@@ -182,12 +182,7 @@ where
         self._find_at(input, start, false)
     }
 
-    fn _find_at<'a, I>(
-        &self,
-        input: I,
-        start: usize,
-        shortest: bool,
-    ) -> Option<(Match<I::Item>, usize)>
+    fn _find_at<I>(&self, input: I, start: usize, shortest: bool) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
         I: IntoIterator,
@@ -239,10 +234,7 @@ where
         })
     }
 
-    pub fn find_shortest_mut<'a, I>(
-        &self,
-        input: &mut Peekable<I>,
-    ) -> Option<(Match<I::Item>, usize)>
+    pub fn find_shortest_mut<I>(&self, input: &mut Peekable<I>) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
         I: Iterator,
@@ -250,7 +242,7 @@ where
         self._find_mut(input, true)
     }
 
-    pub fn find_mut<'a, I>(&self, input: &mut Peekable<I>) -> Option<(Match<I::Item>, usize)>
+    pub fn find_mut<I>(&self, input: &mut Peekable<I>) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
         I: Iterator,
@@ -258,7 +250,7 @@ where
         self._find_mut(input, false)
     }
 
-    fn _find_mut<'a, I>(
+    fn _find_mut<I>(
         &self,
         input: &mut Peekable<I>,
         shortest: bool,
@@ -277,17 +269,11 @@ where
         if !(shortest && last_match.is_some()) {
             let mut span = Vec::new();
 
-            // enumerate() does not work?
             let mut i = 0;
-            loop {
-                // Peek the next symbol to check if a transition on it exists.
-                // If there's no transition, break and do not consume that symbol.
-                // If there is a transition, consume the symbol and push it to the span.
-                let is_next = match input.peek() {
-                    Some(tup) => tup,
-                    None => break,
-                };
-
+            // Peek the next symbol to check if a transition on it exists.
+            // If there's no transition, break and do not consume that symbol.
+            // If there is a transition, consume the symbol and push it to the span.
+            while let Some(is_next) = input.peek() {
                 // Find the transition (if it exists) from the current state for the next symbol.
                 let transitions = self.transition.get_row(&state);
                 state = match transitions
