@@ -100,13 +100,10 @@ impl From<CharClass> for Transition<CharClass> {
 
 /// A trait implemented by regular expression backends, used to evaluate input strings.
 pub trait Engine {
-    #[inline]
     fn is_match(&self, input: &str) -> bool;
 
-    #[inline]
     fn find_at(&self, input: &str, start: usize) -> Option<Match<char>>;
 
-    #[inline]
     fn find_shortest_at(&self, input: &str, start: usize) -> Option<Match<char>>;
 }
 

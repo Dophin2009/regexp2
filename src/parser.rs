@@ -241,7 +241,6 @@ pub trait Parser<T>
 where
     T: Clone,
 {
-    #[inline]
     fn shift_action(
         &self,
         stack: &mut Vec<T>,
@@ -249,7 +248,6 @@ where
         c: CharClass,
     ) -> Result<()>;
 
-    #[inline]
     fn reduce_action(&self, stack: &mut Vec<T>, op_stack: &mut Vec<Operator>) -> Result<()>;
 
     /// Compile a regular expresion.
