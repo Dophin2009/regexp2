@@ -29,6 +29,7 @@ where
     Transition<T>: From<CharClass>,
 {
     /// Create a new NFAParser.
+    #[inline]
     pub fn new() -> Self {
         NFAParser {
             _phantom: PhantomData,
@@ -41,6 +42,7 @@ where
     T: Clone + Eq + Hash,
     Transition<T>: From<CharClass>,
 {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
@@ -53,6 +55,7 @@ where
 {
     /// Implement the shift action. A new NFA with two states and a single transition on the given
     /// character between them is pushed to the parsing stack.
+    #[inline]
     fn shift_action(
         &self,
         stack: &mut Vec<NFA<T>>,
@@ -73,6 +76,7 @@ where
     /// Implement the reduce action for parsing. The most recent operator is popped from the stack
     /// and sub-NFAs are popped from the NFA stack, and a new NFA is constructed and pushed to the
     /// stack.
+    #[inline]
     fn reduce_action(&self, stack: &mut Vec<NFA<T>>, op_stack: &mut Vec<Operator>) -> Result<()> {
         // Pop the last operator off.
         let op = op_stack.pop().ok_or(ParseError::UnbalancedOperators)?;
@@ -133,6 +137,7 @@ where
     T: Clone + Eq + Hash + From<CharClass>,
 {
     /// Create a new ASTParser.
+    #[inline]
     pub fn new() -> Self {
         ASTParser {
             _phantom: PhantomData,
@@ -144,6 +149,7 @@ impl<T> Default for ASTParser<T>
 where
     T: Clone + Eq + Hash + From<CharClass>,
 {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
@@ -154,6 +160,7 @@ where
     T: Clone + Eq + Hash + From<CharClass>,
 {
     /// Implement the shift action. A new leaf node is pushed to the parsing stack.
+    #[inline]
     fn shift_action(
         &self,
         stack: &mut Vec<ASTNode<T>>,
@@ -168,6 +175,7 @@ where
     /// Implement the reduce action for parsing. The most recent operator is popped from the stack
     /// and child nodes are popped from the node stack, and a new node is constructed and pushed to
     /// the stack.
+    #[inline]
     fn reduce_action(
         &self,
         stack: &mut Vec<ASTNode<T>>,
@@ -213,6 +221,7 @@ where
 impl TryFrom<Operator> for ast::Operator {
     type Error = ();
 
+    #[inline]
     fn try_from(op: Operator) -> result::Result<Self, Self::Error> {
         match op {
             Operator::KleeneStar => Ok(Self::KleeneStar),
@@ -232,6 +241,7 @@ pub trait Parser<T>
 where
     T: Clone,
 {
+    #[inline]
     fn shift_action(
         &self,
         stack: &mut Vec<T>,
@@ -239,9 +249,11 @@ where
         c: CharClass,
     ) -> Result<()>;
 
+    #[inline]
     fn reduce_action(&self, stack: &mut Vec<T>, op_stack: &mut Vec<Operator>) -> Result<()>;
 
     /// Compile a regular expresion.
+    #[inline]
     fn parse(&self, expr: &str) -> Result<Option<T>> {
         // Overall super spaghetti, needs refactoring and cleaning up.
         let mut state = ParserState::new(
@@ -552,14 +564,17 @@ where
 struct CharRangeBuf(Option<char>, Option<char>, Option<char>);
 
 impl CharRangeBuf {
+    #[inline]
     fn new() -> Self {
         CharRangeBuf(None, None, None)
     }
 
+    #[inline]
     fn is_empty(&self) -> bool {
         self.0 == None
     }
 
+    #[inline]
     fn clear(&mut self) {
         self.0 = None;
         self.1 = None;
@@ -572,6 +587,7 @@ where
     SF: Copy + FnMut(&mut Vec<T>, &mut Vec<Operator>, CharClass) -> Result<()>,
     RF: Copy + FnMut(&mut Vec<T>, &mut Vec<Operator>) -> Result<()>,
 {
+    #[inline]
     fn new(shift_action: SF, reduce_action: RF) -> Self {
         Self {
             stack: Vec::new(),
@@ -590,11 +606,13 @@ where
         }
     }
 
+    #[inline]
     fn handle_literal_char(&mut self, c: char) -> Result<()> {
         let char_class = c.into();
         self.handle_char_class(char_class)
     }
 
+    #[inline]
     fn handle_char_class(&mut self, c: CharClass) -> Result<()> {
         while self.precedence_reduce_stack(&Operator::Concatenation)? {}
 
@@ -608,6 +626,7 @@ where
         Ok(())
     }
 
+    #[inline]
     fn handle_union(&mut self) -> Result<()> {
         let op = Operator::Union;
         self.precedence_reduce_stack(&op)?;
@@ -618,6 +637,7 @@ where
         Ok(())
     }
 
+    #[inline]
     fn handle_kleene_star(&mut self) -> Result<()> {
         let op = Operator::KleeneStar;
         self.precedence_reduce_stack(&op)?;
@@ -628,6 +648,7 @@ where
         Ok(())
     }
 
+    #[inline]
     fn handle_plus(&mut self) -> Result<()> {
         let op = Operator::Plus;
         self.precedence_reduce_stack(&op)?;
@@ -638,6 +659,7 @@ where
         Ok(())
     }
 
+    #[inline]
     fn handle_optional(&mut self) -> Result<()> {
         let op = Operator::Optional;
         self.precedence_reduce_stack(&op)?;
@@ -648,6 +670,7 @@ where
         Ok(())
     }
 
+    #[inline]
     fn handle_left_paren(&mut self) -> Result<()> {
         let op = Operator::LeftParen;
         self.precedence_reduce_stack(&op)?;
@@ -663,6 +686,7 @@ where
         Ok(())
     }
 
+    #[inline]
     fn handle_right_paren(&mut self) -> Result<()> {
         let last_op = self
             .op_stack
@@ -690,6 +714,7 @@ where
         Ok(())
     }
 
+    #[inline]
     fn handle_right_bracket(&mut self) -> Result<()> {
         // End char class if not escaped and in char class.
         self.in_char_class = false;
@@ -715,6 +740,7 @@ where
         Ok(())
     }
 
+    #[inline]
     fn handle_incomplete_char_range_buf(&mut self) {
         // Existing chars in first and second spots of buffer are added to
         // char class as single-char ranges.
@@ -734,6 +760,7 @@ where
     /// This method should only be called when in_char_class is true.
     /// The escaping of character class metasymbols (]) should be handled outside of this method
     /// call.
+    #[inline]
     fn append_char_range_buf(&mut self, c: char) {
         if self.char_range_buf.0 == None {
             // If first spot is empty, add this char as the start of the range.
@@ -767,14 +794,17 @@ where
         // There should never be a situation where all spots are filled.
     }
 
+    #[inline]
     fn clear_char_class_buf(&mut self) {
         self.char_class_buf = (CharClass::new(), false);
     }
 
+    #[inline]
     fn reduce_stack(&mut self) -> Result<()> {
         self.reduce_action()
     }
 
+    #[inline]
     fn precedence_reduce_stack(&mut self, op: &Operator) -> Result<bool> {
         let reduce = match self.op_stack.last() {
             Some(last_op) => {
@@ -821,18 +851,22 @@ where
         Ok(reduce)
     }
 
+    #[inline]
     fn push_operator(&mut self, op: Operator) {
         self.op_stack.push(op);
     }
 
+    #[inline]
     fn push_concatenation(&mut self) {
         self.op_stack.push(Operator::Concatenation);
     }
 
+    #[inline]
     fn shift_action(&mut self, c: CharClass) -> Result<()> {
         (self.shift_action)(&mut self.stack, &mut self.op_stack, c)
     }
 
+    #[inline]
     fn reduce_action(&mut self) -> Result<()> {
         (self.reduce_action)(&mut self.stack, &mut self.op_stack)
     }
@@ -850,6 +884,7 @@ pub enum ParseError {
 }
 
 impl fmt::Display for ParseError {
+    #[inline]
     fn fmt<'a>(&self, f: &mut fmt::Formatter<'a>) -> fmt::Result {
         match *self {
             Self::UnbalancedOperators => write!(f, "unbalanced operators"),
@@ -860,6 +895,7 @@ impl fmt::Display for ParseError {
 }
 
 impl error::Error for ParseError {
+    #[inline]
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         None
     }

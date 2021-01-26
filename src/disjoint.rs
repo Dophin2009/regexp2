@@ -28,10 +28,12 @@ where
     K: Clone + Ord,
     V: Intersect + Priority<K>,
 {
+    #[inline]
     pub fn new() -> Self {
         Self { tree: Map::new() }
     }
 
+    #[inline]
     pub fn new_with(initial_value: V) -> Self {
         let mut set = Self::new();
         set.insert(initial_value);
@@ -44,6 +46,7 @@ where
     K: Clone + Ord,
     V: Intersect + Priority<K>,
 {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
@@ -54,6 +57,7 @@ where
     K: Clone + Ord,
     V: Intersect + Priority<K>,
 {
+    #[inline]
     fn from(vec: Vec<V>) -> Self {
         let mut set = DisjointSet::new();
         set.extend(vec);
@@ -66,6 +70,7 @@ where
     K: Clone + Ord,
     V: Intersect + Priority<K>,
 {
+    #[inline]
     pub fn insert(&mut self, mut item: V) {
         let mut priority = item.priority();
 
@@ -96,10 +101,12 @@ where
         self.tree.insert(priority, item);
     }
 
+    #[inline]
     pub fn remove(&mut self, priority: K) -> Option<V> {
         self.tree.remove(&priority).map(|(_, v)| v)
     }
 
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.tree.is_empty()
     }
@@ -110,10 +117,12 @@ where
     K: Clone + Ord,
     V: Intersect + Priority<K>,
 {
+    #[inline]
     pub fn iter<'a>(&'a self) -> Iter<'a, K, V> {
         self.tree.iter().into()
     }
 
+    #[inline]
     pub fn iter_mut<'a>(&'a mut self) -> IterMut<'a, K, V> {
         self.tree.iter_mut().into()
     }
@@ -127,6 +136,7 @@ where
     type Item = &'a V;
     type IntoIter = Iter<'a, K, V>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.tree.iter().into()
     }
@@ -140,6 +150,7 @@ where
     type Item = &'a mut V;
     type IntoIter = IterMut<'a, K, V>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.tree.iter_mut().into()
     }
@@ -153,6 +164,7 @@ where
     type Item = V;
     type IntoIter = IntoIter<K, V>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.tree.into_iter().into()
     }
@@ -163,6 +175,7 @@ where
     K: Clone + Ord,
     V: Intersect + Priority<K>,
 {
+    #[inline]
     fn extend<I: IntoIterator<Item = V>>(&mut self, iter: I) {
         for v in iter {
             self.insert(v);
@@ -175,6 +188,7 @@ where
     K: Clone + Ord,
     V: Intersect + Priority<K>,
 {
+    #[inline]
     fn from_iter<I: IntoIterator<Item = V>>(iter: I) -> Self {
         let mut set = Self::new();
         set.extend(iter);
@@ -189,12 +203,14 @@ pub struct Iter<'a, K, V> {
 impl<'a, K, V> Iterator for Iter<'a, K, V> {
     type Item = &'a V;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.map_iter.next().map(|(_, v)| v)
     }
 }
 
 impl<'a, K, V> From<map::Iter<'a, K, V>> for Iter<'a, K, V> {
+    #[inline]
     fn from(map_iter: map::Iter<'a, K, V>) -> Self {
         Self { map_iter }
     }
@@ -207,12 +223,14 @@ pub struct IterMut<'a, K, V> {
 impl<'a, K, V> Iterator for IterMut<'a, K, V> {
     type Item = &'a mut V;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.map_iter.next().map(|(_, v)| v)
     }
 }
 
 impl<'a, K, V> From<map::IterMut<'a, K, V>> for IterMut<'a, K, V> {
+    #[inline]
     fn from(map_iter: map::IterMut<'a, K, V>) -> Self {
         Self { map_iter }
     }
@@ -225,12 +243,14 @@ pub struct IntoIter<K, V> {
 impl<K, V> Iterator for IntoIter<K, V> {
     type Item = V;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.map_iter.next().map(|(_, v)| v)
     }
 }
 
 impl<'a, K, V> From<map::IntoIter<K, V>> for IntoIter<K, V> {
+    #[inline]
     fn from(map_iter: map::IntoIter<K, V>) -> Self {
         Self { map_iter }
     }
