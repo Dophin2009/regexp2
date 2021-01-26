@@ -18,6 +18,7 @@ where
     U: Eq + Hash,
 {
     /// Create an empty table.
+    #[inline]
     pub fn new() -> Self {
         Self {
             map: HashMap::new(),
@@ -30,6 +31,7 @@ where
     T: Eq + Hash,
     U: Eq + Hash,
 {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
@@ -41,6 +43,7 @@ where
     U: Eq + Hash,
 {
     /// Set the value in the table with the given keys.
+    #[inline]
     pub fn set(&mut self, row: T, col: U, val: V) -> Option<V> {
         match self.map.get_mut(&row) {
             Some(c) => c.insert(col, val),
@@ -55,6 +58,7 @@ where
 
     /// Set the value in the table with the given keys, or if some value already exists for those
     /// keys, execute the given callback.
+    #[inline]
     pub fn set_or<F>(&mut self, row: T, col: U, val: V, or: F)
     where
         F: FnOnce(&mut V),
@@ -68,6 +72,7 @@ where
     }
 
     /// Retrieve a mutable reference to the value in the table with the given keys.
+    #[inline]
     pub fn get_mut(&mut self, row: &T, col: &U) -> Option<&mut V> {
         match self.map.get_mut(row) {
             Some(c) => c.get_mut(col),
@@ -76,6 +81,7 @@ where
     }
 
     /// Retrieve an immutable reference to the value in the table with the given keys.
+    #[inline]
     pub fn get(&self, row: &T, col: &U) -> Option<&V> {
         match self.map.get(row) {
             Some(c) => c.get(col),
@@ -84,6 +90,7 @@ where
     }
 
     /// Retrieve an immutable reference to a row of values.
+    #[inline]
     pub fn get_row(&self, row: &T) -> HashMap<&U, &V> {
         let row_map = match self.map.get(row) {
             Some(m) => m,
@@ -94,6 +101,7 @@ where
     }
 
     /// Retrieve an immutable reference to a column of values.
+    #[inline]
     pub fn get_col(&self, col: &U) -> HashMap<&T, &V> {
         let mut result = HashMap::new();
         for (row, column_map) in self.map.iter() {
@@ -114,6 +122,7 @@ where
     V: Clone,
 {
     /// Clone the table.
+    #[inline]
     fn clone(&self) -> Self {
         Table {
             map: self.map.clone(),
@@ -130,6 +139,7 @@ where
     type IntoIter = TableIterator<&'a T, &'a U, &'a V>;
 
     /// Produce an iterator on all the values in the table. See [TableIterator].
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         let vec: Vec<(&'a T, &'a U, &'a V)> = self
             .map
@@ -154,6 +164,7 @@ where
 {
     type Item = (T, U, V);
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next()
     }

@@ -52,6 +52,7 @@ where
     T: Clone + Eq + Hash,
 {
     /// Create a new DFA with a single initial state.
+    #[inline]
     pub fn new() -> Self {
         Self {
             initial_state: 0,
@@ -66,6 +67,7 @@ impl<T> Default for DFA<T>
 where
     T: Clone + Eq + Hash,
 {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
@@ -75,6 +77,7 @@ impl<T> DFA<T>
 where
     T: Clone + Eq + Hash,
 {
+    #[inline]
     pub fn add_state(&mut self, is_final: bool) -> usize {
         let label = self.total_states;
         self.total_states += 1;
@@ -84,6 +87,7 @@ where
         label
     }
 
+    #[inline]
     pub fn add_transition(&mut self, start: usize, end: usize, label: Transition<T>) -> Option<()> {
         if self.total_states < start + 1 || self.total_states < end + 1 {
             None
@@ -93,6 +97,7 @@ where
         }
     }
 
+    #[inline]
     pub fn is_final_state(&self, state: &usize) -> bool {
         self.final_states.iter().any(|s| s == state)
     }
@@ -105,6 +110,7 @@ struct MatchRc<T> {
 }
 
 impl<T> MatchRc<T> {
+    #[inline]
     fn new(start: usize, end: usize, span: Vec<Rc<T>>) -> Self {
         Self { start, end, span }
     }
@@ -115,6 +121,7 @@ where
     T: Clone + Eq + Hash,
 {
     /// Determine if the given input is accepted by the DFA.
+    #[inline]
     pub fn is_match<I>(&self, input: I) -> bool
     where
         T: PartialEq<I::Item>,
@@ -134,6 +141,7 @@ where
         self.is_final_state(&state)
     }
 
+    #[inline]
     pub fn has_match<I>(&self, input: I) -> bool
     where
         T: PartialEq<I::Item>,
@@ -142,6 +150,7 @@ where
         self.has_match_at(input, 0)
     }
 
+    #[inline]
     pub fn has_match_at<I>(&self, input: I, start: usize) -> bool
     where
         T: PartialEq<I::Item>,
@@ -150,6 +159,7 @@ where
         self.find_shortest_at(input, start).is_some()
     }
 
+    #[inline]
     pub fn find_shortest<I>(&self, input: I) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
@@ -158,6 +168,7 @@ where
         self.find_shortest_at(input, 0)
     }
 
+    #[inline]
     pub fn find_shortest_at<I>(&self, input: I, start: usize) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
@@ -166,6 +177,7 @@ where
         self._find_at(input, start, true)
     }
 
+    #[inline]
     pub fn find<I>(&self, input: I) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
@@ -174,6 +186,7 @@ where
         self.find_at(input, 0)
     }
 
+    #[inline]
     pub fn find_at<I>(&self, input: I, start: usize) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
@@ -182,6 +195,7 @@ where
         self._find_at(input, start, false)
     }
 
+    #[inline]
     fn _find_at<I>(&self, input: I, start: usize, shortest: bool) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
@@ -234,6 +248,7 @@ where
         })
     }
 
+    #[inline]
     pub fn find_shortest_mut<I>(&self, input: &mut Peekable<I>) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
@@ -242,6 +257,7 @@ where
         self._find_mut(input, true)
     }
 
+    #[inline]
     pub fn find_mut<I>(&self, input: &mut Peekable<I>) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
@@ -250,6 +266,7 @@ where
         self._find_mut(input, false)
     }
 
+    #[inline]
     fn _find_mut<I>(
         &self,
         input: &mut Peekable<I>,
@@ -328,6 +345,7 @@ struct DState {
 }
 
 impl DState {
+    #[inline]
     fn new(label: usize, nfa_states: HashSet<usize>) -> Self {
         DState { label, nfa_states }
     }
@@ -337,6 +355,7 @@ impl<T> From<NFA<T>> for DFA<T>
 where
     T: Clone + Disjoin + Eq + Hash,
 {
+    #[inline]
     fn from(nfa: NFA<T>) -> Self {
         let dfa_from_nfa: DFAFromNFA<T> = nfa.into();
         dfa_from_nfa.into()
@@ -347,6 +366,7 @@ impl<T> From<DFAFromNFA<T>> for DFA<T>
 where
     T: Clone + Disjoin + Eq + Hash,
 {
+    #[inline]
     fn from(dfa_from_nfa: DFAFromNFA<T>) -> Self {
         dfa_from_nfa.dfa
     }
@@ -359,6 +379,7 @@ where
     // Create an equivalent DFA from an NFA using the subset construction described by Algorithm
     // 3.20. The construction is slightly modified, with inspiration from [this Stack Overflow
     //   answer](https://stackoverflow.com/a/25832898/8955108) to accomodate character ranges.
+    #[inline]
     fn from(nfa: NFA<T>) -> Self {
         let mut dfa = DFA::new();
         let mut nfa_mapping = HashMap::new();

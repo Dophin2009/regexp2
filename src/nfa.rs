@@ -39,6 +39,7 @@ where
 {
     /// Create a new NFA with a single initial state.
     #[allow(clippy::new_without_default)]
+    #[inline]
     pub fn new() -> Self {
         NFA {
             initial_state: 0,
@@ -50,6 +51,7 @@ where
 
     /// Create a new NFA with an initial state, a single final state, and an epsilon transition
     /// between them.
+    #[inline]
     pub fn new_epsilon() -> Self {
         let mut nfa = NFA::new();
         let final_state = nfa.add_state(true);
@@ -62,6 +64,7 @@ where
     /// source are not marked as such in the destination. These states can be accessed by i +
     /// offset, where i is the label of the state in the source NFA, and offset is the initial
     /// total number of states in the destination NFA.
+    #[inline]
     pub fn copy_into(dest: &mut NFA<T>, src: &NFA<T>) {
         let offset = dest.total_states;
         // Create new states.
@@ -80,6 +83,7 @@ where
     /// Construct a new NFA for the union operator of two NFAs. There are epsilon transitions
     /// from the initial state and initial states of the operands. There are also epsilon
     /// transitions from each final state of the operands to the final state.
+    #[inline]
     pub fn union(c1: &NFA<T>, c2: &NFA<T>) -> NFA<T> {
         let mut new_nfa = NFA::new();
         let final_state = new_nfa.add_state(true);
@@ -108,6 +112,7 @@ where
     /// preceding NFA becomes the start state of the new NFA. The final states of the following NFA
     /// are the final states of the new NFA. There are epsilon transitions from the final states of
     /// the former to the start state of the latter.
+    #[inline]
     pub fn concatenation(c1: &NFA<T>, c2: &NFA<T>) -> NFA<T> {
         let mut new_nfa = c1.clone();
 
@@ -129,6 +134,7 @@ where
     }
 
     /// Construct a new NFA for the kleene star operator of an NFA.
+    #[inline]
     pub fn kleene_star(c1: &NFA<T>) -> NFA<T> {
         let mut new_nfa = NFA::new_epsilon();
         let offset = new_nfa.total_states;
@@ -148,6 +154,7 @@ where
 
     /// Construct a new NFA with epsilon transitions from the initial state to the initial states
     /// of each child. The final states of the new NFA are the final states of the children.
+    #[inline]
     pub fn combine(cc: &[&NFA<T>]) -> NFA<T> {
         let mut new_nfa = NFA::new();
         let mut offset = new_nfa.total_states;
@@ -166,6 +173,7 @@ where
 
     /// Add a state to the NFA. The label of the state is returned. The total number of states is
     /// always greater than the label of the newest state by 1.
+    #[inline]
     pub fn add_state(&mut self, is_final: bool) -> usize {
         let label = self.total_states;
         if is_final {
@@ -177,6 +185,7 @@ where
     }
 
     /// Add a transition. Returns None if one or more of the states does not exist.
+    #[inline]
     pub fn add_transition(&mut self, start: usize, end: usize, label: Transition<T>) -> Option<()> {
         if self.total_states < start + 1 || self.total_states < end + 1 {
             None
@@ -189,26 +198,31 @@ where
     }
 
     // Add a non-epsilon transition. See [add_transition].
+    #[inline]
     pub fn add_labeled_transition(&mut self, start: usize, end: usize, label: T) -> Option<()> {
         self.add_transition(start, end, Transition::Some(label))
     }
 
     // Add an epsilon transition. See [add_transition].
+    #[inline]
     pub fn add_epsilon_transition(&mut self, start: usize, end: usize) -> Option<()> {
         self.add_transition(start, end, Transition::Epsilon)
     }
 
+    #[inline]
     pub fn is_final_state(&self, label: &usize) -> bool {
         self.final_states.contains(label)
     }
 
     /// Returns the transitions and destinations from a specific state.
+    #[inline]
     pub fn transitions_from(&self, state: usize) -> HashMap<&Transition<T>, &HashSet<usize>> {
         self.transition.get_row(&state)
     }
 
     /// Computes the function epsilon-closure for some given state in the NFA. Returns the set of
     /// all states accessible from the given state on epsilon transitions only.
+    #[inline]
     pub fn epsilon_closure(&self, state: usize) -> HashSet<usize> {
         let transitions = self.transitions_from(state);
         let mut closure: HashSet<_> = transitions
@@ -221,6 +235,7 @@ where
     }
 
     /// Computes the union of epsilon-closures for each state in the given set of states.
+    #[inline]
     pub fn epsilon_closure_set(&self, state_set: &HashSet<usize>) -> HashSet<usize> {
         let mut set = state_set.clone();
         for state in state_set.iter() {
@@ -230,6 +245,7 @@ where
         set
     }
 
+    #[inline]
     fn move_set<S>(&self, state_set: &HashSet<usize>, input: &S) -> HashSet<usize>
     where
         T: PartialEq<S>,
@@ -253,6 +269,7 @@ where
 
 impl<T: Clone + Eq + Hash> Clone for NFA<T> {
     /// Clone the NFA.
+    #[inline]
     fn clone(&self) -> Self {
         NFA {
             total_states: self.total_states,
@@ -268,6 +285,7 @@ where
     T: Clone + Eq + Hash,
 {
     /// Determines if the given input is accepted by the NFA.
+    #[inline]
     pub fn is_match<I>(&self, input: I) -> bool
     where
         T: PartialEq<I::Item>,
@@ -283,6 +301,7 @@ where
         state_set.iter().any(|s| self.is_final_state(s))
     }
 
+    #[inline]
     pub fn has_match<I>(&self, input: I) -> bool
     where
         T: PartialEq<I::Item>,
@@ -291,6 +310,7 @@ where
         self.has_match_at(input, 0)
     }
 
+    #[inline]
     pub fn has_match_at<I>(&self, input: I, start: usize) -> bool
     where
         T: PartialEq<I::Item>,
@@ -299,6 +319,7 @@ where
         self.find_shortest_at(input, start).is_some()
     }
 
+    #[inline]
     pub fn find_shortest<I>(&self, input: I) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
@@ -307,6 +328,7 @@ where
         self.find_shortest_at(input, 0)
     }
 
+    #[inline]
     pub fn find_shortest_at<I>(&self, input: I, start: usize) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
@@ -315,6 +337,7 @@ where
         self._find_at(input, start, true)
     }
 
+    #[inline]
     pub fn find<I>(&self, input: I) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
@@ -323,6 +346,7 @@ where
         self.find_at(input, 0)
     }
 
+    #[inline]
     pub fn find_at<I>(&self, input: I, start: usize) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
@@ -331,6 +355,7 @@ where
         self._find_at(input, start, false)
     }
 
+    #[inline]
     fn _find_at<I>(&self, input: I, start: usize, shortest: bool) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
@@ -343,6 +368,7 @@ where
         }
 
         impl<T> MatchRc<T> {
+            #[inline]
             fn new(start: usize, end: usize, span: Vec<Rc<T>>) -> Self {
                 Self { start, end, span }
             }
