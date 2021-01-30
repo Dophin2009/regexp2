@@ -118,12 +118,12 @@ where
     V: Intersect + Priority<K>,
 {
     #[inline]
-    pub fn iter<'a>(&'a self) -> Iter<'a, K, V> {
+    pub fn iter(&self) -> Iter<'_, K, V> {
         self.tree.iter().into()
     }
 
     #[inline]
-    pub fn iter_mut<'a>(&'a mut self) -> IterMut<'a, K, V> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
         self.tree.iter_mut().into()
     }
 }
