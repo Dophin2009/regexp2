@@ -312,7 +312,7 @@ where
                 span.push(is_rc);
 
                 if self.is_final_state(&state) {
-                    last_match = Some(MatchRc::new(0, i + 1, span.clone()));
+                    last_match = Some(MatchRc::new(0, i, span.clone()));
                     if shortest {
                         break;
                     }

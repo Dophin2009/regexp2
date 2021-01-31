@@ -2,7 +2,9 @@ use std::ops::Range;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Match<T> {
+    /// Start position of the match.
     pub start: usize,
+    /// Position of the last character matched + 1.
     pub end: usize,
     pub span: Vec<T>,
 }
