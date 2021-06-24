@@ -1,6 +1,6 @@
 use std::iter;
 
-use tree::{map, Map};
+use im::{ordmap, OrdMap};
 
 pub trait Intersect {
     fn intersect(&self, other: &Self) -> bool;
@@ -18,19 +18,21 @@ pub trait Priority<K: Ord> {
 pub struct DisjointSet<K, V>
 where
     K: Clone + Ord,
-    V: Intersect + Priority<K>,
+    V: Clone + Intersect + Priority<K>,
 {
-    tree: Map<K, V>,
+    tree: OrdMap<K, V>,
 }
 
 impl<K, V> DisjointSet<K, V>
 where
     K: Clone + Ord,
-    V: Intersect + Priority<K>,
+    V: Clone + Intersect + Priority<K>,
 {
     #[inline]
     pub fn new() -> Self {
-        Self { tree: Map::new() }
+        Self {
+            tree: OrdMap::new(),
+        }
     }
 
     #[inline]
@@ -44,7 +46,7 @@ where
 impl<K, V> Default for DisjointSet<K, V>
 where
     K: Clone + Ord,
-    V: Intersect + Priority<K>,
+    V: Clone + Intersect + Priority<K>,
 {
     #[inline]
     fn default() -> Self {
@@ -55,7 +57,7 @@ where
 impl<K, V> From<Vec<V>> for DisjointSet<K, V>
 where
     K: Clone + Ord,
-    V: Intersect + Priority<K>,
+    V: Clone + Intersect + Priority<K>,
 {
     #[inline]
     fn from(vec: Vec<V>) -> Self {
@@ -68,14 +70,14 @@ where
 impl<K, V> DisjointSet<K, V>
 where
     K: Clone + Ord,
-    V: Intersect + Priority<K>,
+    V: Clone + Intersect + Priority<K>,
 {
     #[inline]
     pub fn insert(&mut self, mut item: V) {
         let mut priority = item.priority();
 
         // Check for intersection with predecessor.
-        let pred = self.tree.pred(&priority, true);
+        let pred = self.tree.get_prev(&priority);
         if let Some((pred_pri, pred_v)) = pred {
             // If intersecting, merge and remove predecessor.
             // Set item's priority to that of predecessor.
@@ -88,7 +90,7 @@ where
         }
 
         // Check for intersection with successor.
-        let succ = self.tree.succ(&priority, true);
+        let succ = self.tree.get_next(&priority);
         if let Some((succ_pri, succ_v)) = succ {
             // If intersecting, merge and remove successor.
             if item.intersect(succ_v) {
@@ -103,35 +105,24 @@ where
 
     #[inline]
     pub fn remove(&mut self, priority: K) -> Option<V> {
-        self.tree.remove(&priority).map(|(_, v)| v)
+        self.tree.remove(&priority)
     }
 
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.tree.is_empty()
     }
-}
 
-impl<K, V> DisjointSet<K, V>
-where
-    K: Clone + Ord,
-    V: Intersect + Priority<K>,
-{
     #[inline]
     pub fn iter(&self) -> Iter<'_, K, V> {
         self.tree.iter().into()
-    }
-
-    #[inline]
-    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
-        self.tree.iter_mut().into()
     }
 }
 
 impl<'a, K, V> IntoIterator for &'a DisjointSet<K, V>
 where
     K: Clone + Ord,
-    V: Intersect + Priority<K>,
+    V: Clone + Intersect + Priority<K>,
 {
     type Item = &'a V;
     type IntoIter = Iter<'a, K, V>;
@@ -142,24 +133,10 @@ where
     }
 }
 
-impl<'a, K, V> IntoIterator for &'a mut DisjointSet<K, V>
-where
-    K: Clone + Ord,
-    V: Intersect + Priority<K>,
-{
-    type Item = &'a mut V;
-    type IntoIter = IterMut<'a, K, V>;
-
-    #[inline]
-    fn into_iter(self) -> Self::IntoIter {
-        self.tree.iter_mut().into()
-    }
-}
-
 impl<'a, K, V> IntoIterator for DisjointSet<K, V>
 where
     K: Clone + Ord,
-    V: Intersect + Priority<K>,
+    V: Clone + Intersect + Priority<K>,
 {
     type Item = V;
     type IntoIter = IntoIter<K, V>;
@@ -173,7 +150,7 @@ where
 impl<K, V> Extend<V> for DisjointSet<K, V>
 where
     K: Clone + Ord,
-    V: Intersect + Priority<K>,
+    V: Clone + Intersect + Priority<K>,
 {
     #[inline]
     fn extend<I: IntoIterator<Item = V>>(&mut self, iter: I) {
@@ -186,7 +163,7 @@ where
 impl<K, V> iter::FromIterator<V> for DisjointSet<K, V>
 where
     K: Clone + Ord,
-    V: Intersect + Priority<K>,
+    V: Clone + Intersect + Priority<K>,
 {
     #[inline]
     fn from_iter<I: IntoIterator<Item = V>>(iter: I) -> Self {
@@ -197,61 +174,57 @@ where
 }
 
 pub struct Iter<'a, K, V> {
-    map_iter: map::Iter<'a, K, V>,
+    inner: ordmap::Iter<'a, K, V>,
 }
 
-impl<'a, K, V> Iterator for Iter<'a, K, V> {
+impl<'a, K, V> Iterator for Iter<'a, K, V>
+where
+    K: Clone + Ord,
+    V: Clone,
+{
     type Item = &'a V;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.map_iter.next().map(|(_, v)| v)
+        self.inner.next().map(|(_, v)| v)
     }
 }
 
-impl<'a, K, V> From<map::Iter<'a, K, V>> for Iter<'a, K, V> {
+impl<'a, K, V> From<ordmap::Iter<'a, K, V>> for Iter<'a, K, V>
+where
+    K: Clone + Ord,
+    V: Clone,
+{
     #[inline]
-    fn from(map_iter: map::Iter<'a, K, V>) -> Self {
-        Self { map_iter }
-    }
-}
-
-pub struct IterMut<'a, K, V> {
-    map_iter: map::IterMut<'a, K, V>,
-}
-
-impl<'a, K, V> Iterator for IterMut<'a, K, V> {
-    type Item = &'a mut V;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        self.map_iter.next().map(|(_, v)| v)
-    }
-}
-
-impl<'a, K, V> From<map::IterMut<'a, K, V>> for IterMut<'a, K, V> {
-    #[inline]
-    fn from(map_iter: map::IterMut<'a, K, V>) -> Self {
-        Self { map_iter }
+    fn from(inner: ordmap::Iter<'a, K, V>) -> Self {
+        Self { inner }
     }
 }
 
 pub struct IntoIter<K, V> {
-    map_iter: map::IntoIter<K, V>,
+    inner: ordmap::ConsumingIter<(K, V)>,
 }
 
-impl<K, V> Iterator for IntoIter<K, V> {
+impl<K, V> Iterator for IntoIter<K, V>
+where
+    K: Clone + Ord,
+    V: Clone,
+{
     type Item = V;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.map_iter.next().map(|(_, v)| v)
+        self.inner.next().map(|(_, v)| v)
     }
 }
 
-impl<'a, K, V> From<map::IntoIter<K, V>> for IntoIter<K, V> {
+impl<K, V> From<ordmap::ConsumingIter<(K, V)>> for IntoIter<K, V>
+where
+    K: Clone + Ord,
+    V: Clone,
+{
     #[inline]
-    fn from(map_iter: map::IntoIter<K, V>) -> Self {
-        Self { map_iter }
+    fn from(inner: ordmap::ConsumingIter<(K, V)>) -> Self {
+        Self { inner }
     }
 }

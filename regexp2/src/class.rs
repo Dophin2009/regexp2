@@ -198,11 +198,6 @@ impl CharClass {
     pub fn iter(&self) -> CharClassIter<'_> {
         self.ranges.iter().into()
     }
-
-    #[inline]
-    pub fn iter_mut(&mut self) -> CharClassIterMut<'_> {
-        self.ranges.iter_mut().into()
-    }
 }
 
 impl<'a> IntoIterator for &'a CharClass {
@@ -212,16 +207,6 @@ impl<'a> IntoIterator for &'a CharClass {
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.ranges.iter().into()
-    }
-}
-
-impl<'a> IntoIterator for &'a mut CharClass {
-    type Item = &'a mut CharRange;
-    type IntoIter = CharClassIterMut<'a>;
-
-    #[inline]
-    fn into_iter(self) -> Self::IntoIter {
-        self.ranges.iter_mut().into()
     }
 }
 
@@ -251,26 +236,6 @@ impl<'a> Iterator for CharClassIter<'a> {
 impl<'a> From<disjoint::Iter<'a, char, CharRange>> for CharClassIter<'a> {
     #[inline]
     fn from(set_iter: disjoint::Iter<'a, char, CharRange>) -> Self {
-        Self { set_iter }
-    }
-}
-
-pub struct CharClassIterMut<'a> {
-    set_iter: disjoint::IterMut<'a, char, CharRange>,
-}
-
-impl<'a> Iterator for CharClassIterMut<'a> {
-    type Item = &'a mut CharRange;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        self.set_iter.next()
-    }
-}
-
-impl<'a> From<disjoint::IterMut<'a, char, CharRange>> for CharClassIterMut<'a> {
-    #[inline]
-    fn from(set_iter: disjoint::IterMut<'a, char, CharRange>) -> Self {
         Self { set_iter }
     }
 }

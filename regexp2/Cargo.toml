@@ -7,4 +7,4 @@ license = "MIT"
 
 [dependencies]
 automata = { path = "../automata" }
-tree = { git = "https://github.com/apasel422/tree" }
+im = "15.0"
