@@ -2,7 +2,11 @@ use std::iter;
 
 use im::{ordmap, OrdMap};
 
-pub trait Value<K> {
+pub trait Key: Clone + Ord {}
+
+impl<T> Key for T where T: Clone + Ord {}
+
+pub trait Value<K>: Clone {
     fn intersects_with(&self, other: &Self) -> bool;
 
     fn union(&self, other: &Self) -> Self;
@@ -15,16 +19,16 @@ pub trait Value<K> {
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct MergeSet<K, V>
 where
-    K: Clone + Ord,
-    V: Clone + Value<K>,
+    K: Key,
+    V: Value<K>,
 {
     tree: OrdMap<K, V>,
 }
 
 impl<K, V> MergeSet<K, V>
 where
-    K: Clone + Ord,
-    V: Clone + Value<K>,
+    K: Key,
+    V: Value<K>,
 {
     #[inline]
     pub fn new() -> Self {
@@ -43,8 +47,8 @@ where
 
 impl<K, V> Default for MergeSet<K, V>
 where
-    K: Clone + Ord,
-    V: Clone + Value<K>,
+    K: Key,
+    V: Value<K>,
 {
     #[inline]
     fn default() -> Self {
@@ -54,8 +58,8 @@ where
 
 impl<K, V> From<Vec<V>> for MergeSet<K, V>
 where
-    K: Clone + Ord,
-    V: Clone + Value<K>,
+    K: Key,
+    V: Value<K>,
 {
     #[inline]
     fn from(vec: Vec<V>) -> Self {
@@ -67,8 +71,8 @@ where
 
 impl<K, V> MergeSet<K, V>
 where
-    K: Clone + Ord,
-    V: Clone + Value<K>,
+    K: Key,
+    V: Value<K>,
 {
     #[inline]
     pub fn insert(&mut self, mut item: V) {
@@ -119,8 +123,8 @@ where
 
 impl<'a, K, V> IntoIterator for &'a MergeSet<K, V>
 where
-    K: Clone + Ord,
-    V: Clone + Value<K>,
+    K: Key,
+    V: Value<K>,
 {
     type Item = &'a V;
     type IntoIter = Iter<'a, K, V>;
@@ -133,8 +137,8 @@ where
 
 impl<'a, K, V> IntoIterator for MergeSet<K, V>
 where
-    K: Clone + Ord,
-    V: Clone + Value<K>,
+    K: Key,
+    V: Value<K>,
 {
     type Item = V;
     type IntoIter = IntoIter<K, V>;
@@ -147,8 +151,8 @@ where
 
 impl<K, V> Extend<V> for MergeSet<K, V>
 where
-    K: Clone + Ord,
-    V: Clone + Value<K>,
+    K: Key,
+    V: Value<K>,
 {
     #[inline]
     fn extend<I: IntoIterator<Item = V>>(&mut self, iter: I) {
@@ -160,8 +164,8 @@ where
 
 impl<K, V> iter::FromIterator<V> for MergeSet<K, V>
 where
-    K: Clone + Ord,
-    V: Clone + Value<K>,
+    K: Key,
+    V: Value<K>,
 {
     #[inline]
     fn from_iter<I: IntoIterator<Item = V>>(iter: I) -> Self {
@@ -177,7 +181,7 @@ pub struct Iter<'a, K, V> {
 
 impl<'a, K, V> Iterator for Iter<'a, K, V>
 where
-    K: Clone + Ord,
+    K: Key,
     V: Clone,
 {
     type Item = &'a V;
@@ -190,7 +194,7 @@ where
 
 impl<'a, K, V> From<ordmap::Iter<'a, K, V>> for Iter<'a, K, V>
 where
-    K: Clone + Ord,
+    K: Key,
     V: Clone,
 {
     #[inline]
@@ -205,7 +209,7 @@ pub struct IntoIter<K, V> {
 
 impl<K, V> Iterator for IntoIter<K, V>
 where
-    K: Clone + Ord,
+    K: Key,
     V: Clone,
 {
     type Item = V;
@@ -218,7 +222,7 @@ where
 
 impl<K, V> From<ordmap::ConsumingIter<(K, V)>> for IntoIter<K, V>
 where
-    K: Clone + Ord,
+    K: Key,
     V: Clone,
 {
     #[inline]
