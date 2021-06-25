@@ -203,19 +203,6 @@ where
     Some((next_state, is, is_final))
 }
 
-struct MatchRc<T> {
-    start: usize,
-    end: usize,
-    span: Vec<Rc<T>>,
-}
-
-impl<T> MatchRc<T> {
-    #[inline]
-    fn new(start: usize, end: usize, span: Vec<Rc<T>>) -> Self {
-        Self { start, end, span }
-    }
-}
-
 impl<T> DFA<T>
 where
     T: Clone + Eq + Hash,
@@ -281,7 +268,7 @@ where
         I: IntoIterator,
     {
         let mut last_match = if self.is_final_state(&self.initial_state) {
-            Some(MatchRc::new(start, start, vec![]))
+            Some(Match::new(start, start, vec![]))
         } else {
             None
         };
@@ -298,7 +285,7 @@ where
                 state = s;
 
                 if is_final {
-                    last_match = Some(MatchRc::new(start, i + 1, span.clone()));
+                    last_match = Some(Match::new(start, i + 1, span.clone()));
                     if shortest {
                         break;
                     }
