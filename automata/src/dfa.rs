@@ -7,15 +7,6 @@ use std::hash::Hash;
 use std::iter::Peekable;
 use std::rc::Rc;
 
-/// Must be implemented by NFA transition symbol types to ensure each DFA state has only one
-/// possible transition on any symbol.
-pub trait Disjoin: Sized {
-    /// Given a set of transition symbols, return a set of non-overlapping transition symbols.
-    fn disjoin(vec: Vec<&Self>) -> Vec<Self>;
-
-    fn contains(&self, other: &Self) -> bool;
-}
-
 /// A deterministic finite automaton, or DFA.
 #[derive(Debug, Clone)]
 pub struct DFA<T>
@@ -31,15 +22,6 @@ where
     pub final_states: HashSet<usize>,
     /// A lookup table for transitions between states.
     pub transition: Table<usize, Transition<T>, usize>,
-}
-
-#[derive(Debug)]
-pub struct DFAFromNFA<T>
-where
-    T: Clone + Eq + Hash,
-{
-    pub dfa: DFA<T>,
-    pub nfa_mapping: HashMap<usize, HashSet<usize>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -100,6 +82,65 @@ where
     #[inline]
     pub fn is_final_state(&self, state: &usize) -> bool {
         self.final_states.iter().any(|s| s == state)
+    }
+}
+
+impl<T> DFA<T>
+where
+    T: Clone + Eq + Hash,
+{
+    #[inline]
+    pub fn iter_on<I>(&self, input: I) -> Iter<'_, T, I::IntoIter>
+    where
+        T: PartialEq<I::Item>,
+        I: IntoIterator,
+    {
+        Iter {
+            dfa: &self,
+
+            input: input.into_iter(),
+            current: self.initial_state,
+        }
+    }
+}
+
+pub struct Iter<'a, T, I>
+where
+    T: Clone + Eq + Hash,
+    T: PartialEq<I::Item>,
+    I: Iterator,
+{
+    dfa: &'a DFA<T>,
+
+    input: I,
+    current: usize,
+}
+
+impl<'a, T, I> Iterator for Iter<'a, T, I>
+where
+    T: Clone + Eq + Hash,
+    T: PartialEq<I::Item>,
+    I: Iterator,
+{
+    type Item = (usize, I::Item, bool);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let state = self.current;
+        let is = match self.input.next() {
+            Some(v) => v,
+            None => return None,
+        };
+
+        let transitions = self.dfa.transition.get_row(&state);
+        let next_state = match transitions.iter().find(|(&Transition(t), _)| *t == is) {
+            Some((_, &&s)) => s,
+            None => return None,
+        };
+
+        let is_final = self.dfa.is_final_state(&next_state);
+
+        self.current = next_state;
+        Some((next_state, is, is_final))
     }
 }
 
@@ -338,6 +379,15 @@ where
     }
 }
 
+#[derive(Debug)]
+pub struct DFAFromNFA<T>
+where
+    T: Clone + Eq + Hash,
+{
+    pub dfa: DFA<T>,
+    pub nfa_mapping: HashMap<usize, HashSet<usize>>,
+}
+
 #[derive(Clone, Debug)]
 struct DState {
     label: usize,
@@ -347,8 +397,17 @@ struct DState {
 impl DState {
     #[inline]
     fn new(label: usize, nfa_states: HashSet<usize>) -> Self {
-        DState { label, nfa_states }
+        Self { label, nfa_states }
     }
+}
+
+/// Must be implemented by NFA transition symbol types to ensure each DFA state has only one
+/// possible transition on any symbol.
+pub trait Disjoin: Sized {
+    /// Given a set of transition symbols, return a set of non-overlapping transition symbols.
+    fn disjoin(vec: Vec<&Self>) -> Vec<Self>;
+
+    fn contains(&self, other: &Self) -> bool;
 }
 
 impl<T> From<NFA<T>> for DFA<T>
@@ -469,6 +528,6 @@ where
             marked_states.push(s);
         }
 
-        DFAFromNFA { dfa, nfa_mapping }
+        Self { dfa, nfa_mapping }
     }
 }
