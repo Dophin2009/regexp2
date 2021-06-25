@@ -229,18 +229,10 @@ where
         T: PartialEq<I::Item>,
         I: IntoIterator,
     {
-        let mut state = self.initial_state;
-
-        for is in input.into_iter() {
-            let transitions = self.transition.get_row(&state);
-            state = match transitions.iter().find(|(&Transition(t), _)| *t == is) {
-                Some((_, &&s)) => s,
-                // No transition on current symbol from current state: no match.
-                None => return false,
-            }
+        match self.iter_on(input).last() {
+            Some((_, _, is_final)) => is_final,
+            None => false,
         }
-
-        self.is_final_state(&state)
     }
 
     #[inline]
@@ -258,7 +250,7 @@ where
         T: PartialEq<I::Item>,
         I: IntoIterator,
     {
-        self._find_at(input, start, true)
+        self.find_at_impl(input, start, true)
     }
 
     #[inline]
@@ -276,37 +268,38 @@ where
         T: PartialEq<I::Item>,
         I: IntoIterator,
     {
-        self._find_at(input, start, false)
+        self.find_at_impl(input, start, false)
     }
 
     #[inline]
-    fn _find_at<I>(&self, input: I, start: usize, shortest: bool) -> Option<(Match<I::Item>, usize)>
+    fn find_at_impl<I>(
+        &self,
+        input: I,
+        start: usize,
+        shortest: bool,
+    ) -> Option<(Match<I::Item>, usize)>
     where
         T: PartialEq<I::Item>,
         I: IntoIterator,
     {
-        let mut state = self.initial_state;
-        let mut last_match = if self.is_final_state(&state) {
+        let mut last_match = if self.is_final_state(&self.initial_state) {
             Some(MatchRc::new(start, start, vec![]))
         } else {
             None
         };
 
+        let mut state = self.initial_state;
         if !(shortest && last_match.is_some()) {
-            let input = input.into_iter().skip(start);
-            let mut span = Vec::new();
-            for (i, is) in input.enumerate() {
-                let transitions = self.transition.get_row(&state);
-                state = match transitions.iter().find(|(&Transition(t), _)| *t == is) {
-                    Some((_, &&s)) => s,
-                    // No transition on current symbol from current state: no match.
-                    None => break,
-                };
+            let iter = self.iter_on(input).skip(start).enumerate();
 
+            let mut span = Vec::new();
+            for (i, (s, is, is_final)) in iter {
                 let is_rc = Rc::new(is);
                 span.push(is_rc);
 
-                if self.is_final_state(&state) {
+                state = s;
+
+                if is_final {
                     last_match = Some(MatchRc::new(start, i + 1, span.clone()));
                     if shortest {
                         break;
@@ -316,19 +309,21 @@ where
         }
 
         last_match.map(|m| {
-            let mt = Match::new(
-                m.start,
-                m.end,
-                m.span
-                    .into_iter()
-                    .map(|rc| match Rc::try_unwrap(rc) {
-                        Ok(v) => v,
-                        // Shouldn't ever have any lingering references.
-                        Err(_) => unreachable!(),
-                    })
-                    .collect(),
-            );
-            (mt, state)
+            (
+                Match::new(
+                    m.start,
+                    m.end,
+                    m.span
+                        .into_iter()
+                        .map(|rc| match Rc::try_unwrap(rc) {
+                            Ok(v) => v,
+                            // Shouldn't ever have any lingering references.
+                            Err(_) => unreachable!("MatchRc somehow had lingering references"),
+                        })
+                        .collect(),
+                ),
+                state,
+            )
         })
     }
 
