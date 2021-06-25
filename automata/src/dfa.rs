@@ -3,6 +3,7 @@ use crate::table::Table;
 
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
+use std::iter::Peekable;
 use std::rc::Rc;
 
 /// A deterministic finite automaton, or DFA.
@@ -101,8 +102,8 @@ where
         Iter {
             dfa: &self,
 
-            input: input.into_iter(),
-            current: self.initial_state,
+            input: input.into_iter().peekable(),
+            last: None,
         }
     }
 
@@ -112,17 +113,15 @@ where
         T: PartialEq<I::Item>,
         I: IntoIterator,
     {
-        let current = self.initial_state;
         IntoIter {
             dfa: self,
 
-            input: input.into_iter(),
-            current,
+            input: input.into_iter().peekable(),
+            last: None,
         }
     }
 }
 
-#[derive(Debug)]
 pub struct Iter<'a, T, I>
 where
     T: Clone + Eq + Hash,
@@ -131,8 +130,8 @@ where
 {
     dfa: &'a DFA<T>,
 
-    input: I,
-    current: usize,
+    input: Peekable<I>,
+    last: Option<(bool, usize)>,
 }
 
 impl<'a, T, I> Iterator for Iter<'a, T, I>
@@ -141,14 +140,14 @@ where
     T: PartialEq<I::Item>,
     I: Iterator,
 {
-    type Item = (usize, I::Item, bool);
+    type Item = IterState<I>;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        iter_on_next(&self.dfa, &mut self.input, &mut self.current)
+        iter_on_next(&self.dfa, &mut self.input, &mut self.last)
     }
 }
 
-#[derive(Debug)]
 pub struct IntoIter<T, I>
 where
     T: Clone + Eq + Hash,
@@ -157,8 +156,8 @@ where
 {
     dfa: DFA<T>,
 
-    input: I,
-    current: usize,
+    input: Peekable<I>,
+    last: Option<(bool, usize)>,
 }
 
 impl<T, I> Iterator for IntoIter<T, I>
@@ -167,40 +166,69 @@ where
     T: PartialEq<I::Item>,
     I: Iterator,
 {
-    type Item = (usize, I::Item, bool);
+    type Item = IterState<I>;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        iter_on_next(&self.dfa, &mut self.input, &mut self.current)
+        iter_on_next(&self.dfa, &mut self.input, &mut self.last)
     }
+}
+
+pub enum IterState<I>
+where
+    I: Iterator,
+{
+    Normal(I::Item, usize, bool),
+    Stuck(usize),
 }
 
 #[inline]
 fn iter_on_next<T, I>(
     dfa: &DFA<T>,
-    input: &mut I,
-    current: &mut usize,
-) -> Option<(usize, I::Item, bool)>
+    input: &mut Peekable<I>,
+    last: &mut Option<(bool, usize)>,
+) -> Option<IterState<I>>
 where
     T: Clone + Eq + Hash,
     T: PartialEq<I::Item>,
     I: Iterator,
 {
-    let state = *current;
-    let is = match input.next() {
+    let current = match *last {
+        None => dfa.initial_state,
+        Some((false, state)) => state,
+        // If we were last stuck, return None to indicate that last state was stuck.
+        Some((true, _)) => return None,
+    };
+
+    let peek_is = match input.peek() {
         Some(v) => v,
+        // No more input, so last item was the final.
         None => return None,
     };
 
-    let transitions = dfa.transitions_on(&state);
-    let next_state = match transitions.iter().find(|(&Transition(t), _)| *t == is) {
-        Some((_, &&s)) => s,
-        None => return None,
+    let transitions = dfa.transitions_on(&current);
+    let next = match transitions
+        .iter()
+        .find(|(&Transition(t), _)| *t == *peek_is)
+    {
+        Some((_, &&next_state)) => {
+            // Consume input symbol.
+            let is = input.next().unwrap();
+
+            // Check if current state is an accepting one.
+            let is_final = dfa.is_final_state(&next_state);
+
+            *last = Some((false, next_state));
+            Some(IterState::Normal(is, next_state, is_final))
+        }
+        // No more transitions, so stuck.
+        None => {
+            *last = Some((true, current));
+            Some(IterState::Stuck(current))
+        }
     };
 
-    let is_final = dfa.is_final_state(&next_state);
-
-    *current = next_state;
-    Some((next_state, is, is_final))
+    next
 }
 
 impl<T> DFA<T>
@@ -214,9 +242,13 @@ where
         T: PartialEq<I::Item>,
         I: IntoIterator,
     {
+        println!();
         match self.iter_on(input).last() {
-            Some((_, _, is_final)) => is_final,
-            None => false,
+            Some(IterState::Normal(_, _, is_final)) => is_final,
+            Some(IterState::Stuck(_)) => false,
+            // None means that no movement happened; check if the current state (start state) is an
+            // accepting state.
+            None => self.is_final_state(&self.initial_state),
         }
     }
 
@@ -278,17 +310,22 @@ where
             let iter = self.iter_on(input).skip(start).enumerate();
 
             let mut span = Vec::new();
-            for (i, (s, is, is_final)) in iter {
-                let is_rc = Rc::new(is);
-                span.push(is_rc);
+            for (i, iter_state) in iter {
+                match iter_state {
+                    IterState::Normal(is, s, is_final) => {
+                        let is_rc = Rc::new(is);
+                        span.push(is_rc);
 
-                state = s;
+                        state = s;
 
-                if is_final {
-                    last_match = Some(Match::new(start, i + 1, span.clone()));
-                    if shortest {
-                        break;
+                        if is_final {
+                            last_match = Some(Match::new(start, i + 1, span.clone()));
+                            if shortest {
+                                break;
+                            }
+                        }
                     }
+                    IterState::Stuck(_) => break,
                 }
             }
         }
