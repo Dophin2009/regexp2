@@ -1,4 +1,4 @@
-use crate::disjoint::{self, DisjointSet, Intersect, Priority};
+use crate::mergeset::{self, MergeSet, Value as MergeSetValue};
 use crate::ranges::{DECIMAL_NUMBER, LETTER};
 
 use std::cmp;
@@ -20,7 +20,7 @@ const USV_END_2: char = '\u{10ffff}';
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct CharClass {
     /// The ranges included in the character class.
-    pub ranges: DisjointSet<char, CharRange>,
+    pub ranges: MergeSet<char, CharRange>,
 }
 
 impl CharClass {
@@ -127,7 +127,7 @@ impl CharClass {
     #[inline]
     pub fn new() -> Self {
         Self {
-            ranges: DisjointSet::new(),
+            ranges: MergeSet::new(),
         }
     }
 }
@@ -221,7 +221,7 @@ impl IntoIterator for CharClass {
 }
 
 pub struct CharClassIter<'a> {
-    set_iter: disjoint::Iter<'a, char, CharRange>,
+    set_iter: mergeset::Iter<'a, char, CharRange>,
 }
 
 impl<'a> Iterator for CharClassIter<'a> {
@@ -233,15 +233,15 @@ impl<'a> Iterator for CharClassIter<'a> {
     }
 }
 
-impl<'a> From<disjoint::Iter<'a, char, CharRange>> for CharClassIter<'a> {
+impl<'a> From<mergeset::Iter<'a, char, CharRange>> for CharClassIter<'a> {
     #[inline]
-    fn from(set_iter: disjoint::Iter<'a, char, CharRange>) -> Self {
+    fn from(set_iter: mergeset::Iter<'a, char, CharRange>) -> Self {
         Self { set_iter }
     }
 }
 
 pub struct CharClassIntoIter {
-    set_iter: disjoint::IntoIter<char, CharRange>,
+    set_iter: mergeset::IntoIter<char, CharRange>,
 }
 
 impl Iterator for CharClassIntoIter {
@@ -253,9 +253,9 @@ impl Iterator for CharClassIntoIter {
     }
 }
 
-impl From<disjoint::IntoIter<char, CharRange>> for CharClassIntoIter {
+impl From<mergeset::IntoIter<char, CharRange>> for CharClassIntoIter {
     #[inline]
-    fn from(set_iter: disjoint::IntoIter<char, CharRange>) -> Self {
+    fn from(set_iter: mergeset::IntoIter<char, CharRange>) -> Self {
         Self { set_iter }
     }
 }
@@ -338,9 +338,9 @@ impl CharRange {
     }
 }
 
-impl Intersect for CharRange {
+impl MergeSetValue<char> for CharRange {
     #[inline]
-    fn intersect(&self, other: &Self) -> bool {
+    fn intersects_with(&self, other: &Self) -> bool {
         self.intersection(other).is_some()
     }
 
@@ -351,11 +351,9 @@ impl Intersect for CharRange {
             cmp::max(self.end, other.end),
         )
     }
-}
 
-impl Priority<char> for CharRange {
     #[inline]
-    fn priority(&self) -> char {
+    fn key(&self) -> char {
         self.start
     }
 }

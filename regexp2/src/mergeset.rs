@@ -2,31 +2,29 @@ use std::iter;
 
 use im::{ordmap, OrdMap};
 
-pub trait Intersect {
-    fn intersect(&self, other: &Self) -> bool;
+pub trait Value<K> {
+    fn intersects_with(&self, other: &Self) -> bool;
 
     fn union(&self, other: &Self) -> Self;
-}
 
-pub trait Priority<K: Ord> {
-    fn priority(&self) -> K;
+    fn key(&self) -> K;
 }
 
 // A data structure to maintain a minimal set of disjoint elements. It is implemented using a
 // binary search tree.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct DisjointSet<K, V>
+pub struct MergeSet<K, V>
 where
     K: Clone + Ord,
-    V: Clone + Intersect + Priority<K>,
+    V: Clone + Value<K>,
 {
     tree: OrdMap<K, V>,
 }
 
-impl<K, V> DisjointSet<K, V>
+impl<K, V> MergeSet<K, V>
 where
     K: Clone + Ord,
-    V: Clone + Intersect + Priority<K>,
+    V: Clone + Value<K>,
 {
     #[inline]
     pub fn new() -> Self {
@@ -43,10 +41,10 @@ where
     }
 }
 
-impl<K, V> Default for DisjointSet<K, V>
+impl<K, V> Default for MergeSet<K, V>
 where
     K: Clone + Ord,
-    V: Clone + Intersect + Priority<K>,
+    V: Clone + Value<K>,
 {
     #[inline]
     fn default() -> Self {
@@ -54,34 +52,34 @@ where
     }
 }
 
-impl<K, V> From<Vec<V>> for DisjointSet<K, V>
+impl<K, V> From<Vec<V>> for MergeSet<K, V>
 where
     K: Clone + Ord,
-    V: Clone + Intersect + Priority<K>,
+    V: Clone + Value<K>,
 {
     #[inline]
     fn from(vec: Vec<V>) -> Self {
-        let mut set = DisjointSet::new();
+        let mut set = MergeSet::new();
         set.extend(vec);
         set
     }
 }
 
-impl<K, V> DisjointSet<K, V>
+impl<K, V> MergeSet<K, V>
 where
     K: Clone + Ord,
-    V: Clone + Intersect + Priority<K>,
+    V: Clone + Value<K>,
 {
     #[inline]
     pub fn insert(&mut self, mut item: V) {
-        let mut priority = item.priority();
+        let mut priority = item.key();
 
         // Check for intersection with predecessor.
         let pred = self.tree.get_prev(&priority);
         if let Some((pred_pri, pred_v)) = pred {
             // If intersecting, merge and remove predecessor.
             // Set item's priority to that of predecessor.
-            if item.intersect(pred_v) {
+            if item.intersects_with(pred_v) {
                 item = item.union(pred_v);
                 priority = pred_pri.clone();
 
@@ -93,7 +91,7 @@ where
         let succ = self.tree.get_next(&priority);
         if let Some((succ_pri, succ_v)) = succ {
             // If intersecting, merge and remove successor.
-            if item.intersect(succ_v) {
+            if item.intersects_with(succ_v) {
                 item = item.union(succ_v);
                 let del_pri = succ_pri.clone();
                 self.tree.remove(&del_pri);
@@ -119,10 +117,10 @@ where
     }
 }
 
-impl<'a, K, V> IntoIterator for &'a DisjointSet<K, V>
+impl<'a, K, V> IntoIterator for &'a MergeSet<K, V>
 where
     K: Clone + Ord,
-    V: Clone + Intersect + Priority<K>,
+    V: Clone + Value<K>,
 {
     type Item = &'a V;
     type IntoIter = Iter<'a, K, V>;
@@ -133,10 +131,10 @@ where
     }
 }
 
-impl<'a, K, V> IntoIterator for DisjointSet<K, V>
+impl<'a, K, V> IntoIterator for MergeSet<K, V>
 where
     K: Clone + Ord,
-    V: Clone + Intersect + Priority<K>,
+    V: Clone + Value<K>,
 {
     type Item = V;
     type IntoIter = IntoIter<K, V>;
@@ -147,10 +145,10 @@ where
     }
 }
 
-impl<K, V> Extend<V> for DisjointSet<K, V>
+impl<K, V> Extend<V> for MergeSet<K, V>
 where
     K: Clone + Ord,
-    V: Clone + Intersect + Priority<K>,
+    V: Clone + Value<K>,
 {
     #[inline]
     fn extend<I: IntoIterator<Item = V>>(&mut self, iter: I) {
@@ -160,10 +158,10 @@ where
     }
 }
 
-impl<K, V> iter::FromIterator<V> for DisjointSet<K, V>
+impl<K, V> iter::FromIterator<V> for MergeSet<K, V>
 where
     K: Clone + Ord,
-    V: Clone + Intersect + Priority<K>,
+    V: Clone + Value<K>,
 {
     #[inline]
     fn from_iter<I: IntoIterator<Item = V>>(iter: I) -> Self {

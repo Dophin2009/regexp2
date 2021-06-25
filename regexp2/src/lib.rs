@@ -4,7 +4,7 @@
 mod regexp;
 
 mod ast;
-mod disjoint;
+mod mergeset;
 mod ranges;
 
 pub mod class;
