@@ -80,6 +80,11 @@ where
     }
 
     #[inline]
+    pub fn transitions_on(&self, state: &usize) -> HashMap<&Transition<T>, &usize> {
+        self.transition.get_row(state)
+    }
+
+    #[inline]
     pub fn is_final_state(&self, state: &usize) -> bool {
         self.final_states.iter().any(|s| s == state)
     }
@@ -102,8 +107,24 @@ where
             current: self.initial_state,
         }
     }
+
+    #[inline]
+    pub fn into_iter_on<I>(self, input: I) -> IntoIter<T, I::IntoIter>
+    where
+        T: PartialEq<I::Item>,
+        I: IntoIterator,
+    {
+        let current = self.initial_state;
+        IntoIter {
+            dfa: self,
+
+            input: input.into_iter(),
+            current,
+        }
+    }
 }
 
+#[derive(Debug)]
 pub struct Iter<'a, T, I>
 where
     T: Clone + Eq + Hash,
@@ -125,23 +146,63 @@ where
     type Item = (usize, I::Item, bool);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let state = self.current;
-        let is = match self.input.next() {
-            Some(v) => v,
-            None => return None,
-        };
-
-        let transitions = self.dfa.transition.get_row(&state);
-        let next_state = match transitions.iter().find(|(&Transition(t), _)| *t == is) {
-            Some((_, &&s)) => s,
-            None => return None,
-        };
-
-        let is_final = self.dfa.is_final_state(&next_state);
-
-        self.current = next_state;
-        Some((next_state, is, is_final))
+        iter_on_next(&self.dfa, &mut self.input, &mut self.current)
     }
+}
+
+#[derive(Debug)]
+pub struct IntoIter<T, I>
+where
+    T: Clone + Eq + Hash,
+    T: PartialEq<I::Item>,
+    I: Iterator,
+{
+    dfa: DFA<T>,
+
+    input: I,
+    current: usize,
+}
+
+impl<T, I> Iterator for IntoIter<T, I>
+where
+    T: Clone + Eq + Hash,
+    T: PartialEq<I::Item>,
+    I: Iterator,
+{
+    type Item = (usize, I::Item, bool);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        iter_on_next(&self.dfa, &mut self.input, &mut self.current)
+    }
+}
+
+#[inline]
+fn iter_on_next<T, I>(
+    dfa: &DFA<T>,
+    input: &mut I,
+    current: &mut usize,
+) -> Option<(usize, I::Item, bool)>
+where
+    T: Clone + Eq + Hash,
+    T: PartialEq<I::Item>,
+    I: Iterator,
+{
+    let state = *current;
+    let is = match input.next() {
+        Some(v) => v,
+        None => return None,
+    };
+
+    let transitions = dfa.transitions_on(&state);
+    let next_state = match transitions.iter().find(|(&Transition(t), _)| *t == is) {
+        Some((_, &&s)) => s,
+        None => return None,
+    };
+
+    let is_final = dfa.is_final_state(&next_state);
+
+    *current = next_state;
+    Some((next_state, is, is_final))
 }
 
 struct MatchRc<T> {
