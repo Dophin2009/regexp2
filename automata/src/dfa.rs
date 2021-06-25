@@ -243,7 +243,6 @@ where
         T: PartialEq<I::Item>,
         I: IntoIterator,
     {
-        println!();
         match self.iter_on(input).last() {
             Some(IterState::Normal(_, _, is_final)) => is_final,
             Some(IterState::Stuck(_)) => false,
@@ -254,7 +253,7 @@ where
     }
 
     #[inline]
-    pub fn find_shortest<I>(&self, input: I) -> Option<(Match<I::Item>, usize)>
+    pub fn find_shortest<I>(&self, input: I) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
         I: IntoIterator,
@@ -263,7 +262,7 @@ where
     }
 
     #[inline]
-    pub fn find_shortest_at<I>(&self, input: I, start: usize) -> Option<(Match<I::Item>, usize)>
+    pub fn find_shortest_at<I>(&self, input: I, start: usize) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
         I: IntoIterator,
@@ -272,7 +271,7 @@ where
     }
 
     #[inline]
-    pub fn find<I>(&self, input: I) -> Option<(Match<I::Item>, usize)>
+    pub fn find<I>(&self, input: I) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
         I: IntoIterator,
@@ -281,7 +280,7 @@ where
     }
 
     #[inline]
-    pub fn find_at<I>(&self, input: I, start: usize) -> Option<(Match<I::Item>, usize)>
+    pub fn find_at<I>(&self, input: I, start: usize) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
         I: IntoIterator,
@@ -290,12 +289,7 @@ where
     }
 
     #[inline]
-    fn find_at_impl<I>(
-        &self,
-        input: I,
-        start: usize,
-        shortest: bool,
-    ) -> Option<(Match<I::Item>, usize)>
+    fn find_at_impl<I>(&self, input: I, start: usize, shortest: bool) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
         I: IntoIterator,
@@ -306,18 +300,15 @@ where
             None
         };
 
-        let mut state = self.initial_state;
         if !(shortest && last_match.is_some()) {
             let iter = self.iter_on(input).skip(start).enumerate();
 
             let mut span = Vec::new();
             for (i, iter_state) in iter {
                 match iter_state {
-                    IterState::Normal(is, s, is_final) => {
+                    IterState::Normal(is, _, is_final) => {
                         let is_rc = Rc::new(is);
                         span.push(is_rc);
-
-                        state = s;
 
                         if is_final {
                             last_match = Some(Match::new(start, i + 1, span.clone()));
@@ -332,20 +323,17 @@ where
         }
 
         last_match.map(|m| {
-            (
-                Match::new(
-                    m.start,
-                    m.end,
-                    m.span
-                        .into_iter()
-                        .map(|rc| match Rc::try_unwrap(rc) {
-                            Ok(v) => v,
-                            // Shouldn't ever have any lingering references.
-                            Err(_) => unreachable!("MatchRc somehow had lingering references"),
-                        })
-                        .collect(),
-                ),
-                state,
+            Match::new(
+                m.start,
+                m.end,
+                m.span
+                    .into_iter()
+                    .map(|rc| match Rc::try_unwrap(rc) {
+                        Ok(v) => v,
+                        // Shouldn't ever have any lingering references.
+                        Err(_) => unreachable!("MatchRc somehow had lingering references"),
+                    })
+                    .collect(),
             )
         })
     }
