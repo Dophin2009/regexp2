@@ -3,6 +3,7 @@
 
 mod matching;
 
+pub mod convert;
 pub mod dfa;
 pub mod nfa;
 pub mod table;
