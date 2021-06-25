@@ -174,6 +174,7 @@ where
     }
 }
 
+#[derive(Debug)]
 pub enum IterState<I>
 where
     I: Iterator,
