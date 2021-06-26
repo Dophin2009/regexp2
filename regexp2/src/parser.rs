@@ -66,7 +66,7 @@ where
 
         let mut nfa = NFA::new();
         let final_state = nfa.add_state(true);
-        nfa.add_transition(nfa.initial_state, final_state, transition);
+        nfa.add_transition(nfa.start_state, final_state, transition);
 
         stack.push(nfa);
 
@@ -115,7 +115,7 @@ where
             // A new NFA with a single epsilon transition is pushed to the stack.
             Operator::EmptyPlaceholder => {
                 new_nfa = NFA::new();
-                new_nfa.final_states.insert(new_nfa.initial_state);
+                new_nfa.accepting_states.insert(new_nfa.start_state);
             }
             Operator::LeftParen => return Err(ParseError::UnbalancedParentheses),
         }

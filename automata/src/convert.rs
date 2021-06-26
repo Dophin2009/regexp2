@@ -72,15 +72,15 @@ where
         let mut unmarked_states = VecDeque::new();
 
         let label = 0;
-        let initial_e_closure = nfa.epsilon_closure(nfa.initial_state);
+        let initial_e_closure = nfa.epsilon_closure(nfa.start_state);
         let initial_unmarked = DState::new(label, initial_e_closure);
 
         if initial_unmarked
             .nfa_states
             .iter()
-            .any(|i| nfa.is_final_state(i))
+            .any(|i| nfa.is_accepting_state(i))
         {
-            dfa.final_states.insert(initial_unmarked.label);
+            dfa.accepting_states.insert(initial_unmarked.label);
         }
 
         nfa_mapping.insert(initial_unmarked.label, initial_unmarked.nfa_states.clone());
@@ -139,8 +139,12 @@ where
 
                     // If this set state contains an accepting NFA state, set this set state
                     // as accepting in the DFA.
-                    if new_state.nfa_states.iter().any(|i| nfa.is_final_state(i)) {
-                        dfa.final_states.insert(new_state.label);
+                    if new_state
+                        .nfa_states
+                        .iter()
+                        .any(|i| nfa.is_accepting_state(i))
+                    {
+                        dfa.accepting_states.insert(new_state.label);
                     }
 
                     dfa.add_transition(s.label, new_state.label, Transition(t));

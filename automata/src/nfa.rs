@@ -12,13 +12,13 @@ include!("macros.rs");
 /// A non-deterministic finite automaton, or NFA.
 #[derive(Debug)]
 pub struct NFA<T: Clone + Eq + Hash> {
-    /// An NFA has a single initial state.
-    pub initial_state: usize,
+    /// An NFA has a single start state.
+    pub start_state: usize,
     /// The number of total states in the NFA. There is a state labeled i for every i where 0 <= i
     /// < total_states.
     pub total_states: usize,
     /// The set of accepting states.
-    pub final_states: HashSet<usize>,
+    pub accepting_states: HashSet<usize>,
     /// A lookup table for transitions between states.
     pub transition: Table<usize, Transition<T>, HashSet<usize>>,
 }
@@ -37,32 +37,32 @@ impl<T> NFA<T>
 where
     T: Clone + Eq + Hash,
 {
-    /// Create a new NFA with a single initial state.
+    /// Create a new NFA with a single start state.
     #[allow(clippy::new_without_default)]
     #[inline]
     pub fn new() -> Self {
         NFA {
-            initial_state: 0,
+            start_state: 0,
             total_states: 1,
-            final_states: HashSet::new(),
+            accepting_states: HashSet::new(),
             transition: Table::new(),
         }
     }
 
-    /// Create a new NFA with an initial state, a single final state, and an epsilon transition
+    /// Create a new NFA with an start state, a single accepting state, and an epsilon transition
     /// between them.
     #[inline]
     pub fn new_epsilon() -> Self {
         let mut nfa = NFA::new();
-        let final_state = nfa.add_state(true);
-        nfa.add_epsilon_transition(nfa.initial_state, final_state);
+        let accepting_state = nfa.add_state(true);
+        nfa.add_epsilon_transition(nfa.start_state, accepting_state);
 
         nfa
     }
 
-    /// Clone the states and transitions of an NFA into another. The initial and final states of the
+    /// Clone the states and transitions of an NFA into another. The start and accepting states of the
     /// source are not marked as such in the destination. These states can be accessed by i +
-    /// offset, where i is the label of the state in the source NFA, and offset is the initial
+    /// offset, where i is the label of the state in the source NFA, and offset is the start
     /// total number of states in the destination NFA.
     #[inline]
     pub fn copy_into(dest: &mut NFA<T>, src: &NFA<T>) {
@@ -81,36 +81,36 @@ where
     }
 
     /// Construct a new NFA for the union operator of two NFAs. There are epsilon transitions
-    /// from the initial state and initial states of the operands. There are also epsilon
-    /// transitions from each final state of the operands to the final state.
+    /// from the start state and initial states of the operands. There are also epsilon
+    /// transitions from each accepting state of the operands to the final state.
     #[inline]
     pub fn union(c1: &NFA<T>, c2: &NFA<T>) -> NFA<T> {
         let mut new_nfa = NFA::new();
-        let final_state = new_nfa.add_state(true);
-        let initial_state = new_nfa.initial_state;
+        let accepting_state = new_nfa.add_state(true);
+        let start_state = new_nfa.start_state;
 
         let mut offset = new_nfa.total_states;
 
         NFA::copy_into(&mut new_nfa, c1);
-        new_nfa.add_epsilon_transition(initial_state, c1.initial_state + offset);
-        for c1_final in c1.final_states.iter() {
-            new_nfa.add_epsilon_transition(*c1_final + offset, final_state);
+        new_nfa.add_epsilon_transition(start_state, c1.start_state + offset);
+        for c1_final in c1.accepting_states.iter() {
+            new_nfa.add_epsilon_transition(*c1_final + offset, accepting_state);
         }
 
         offset = new_nfa.total_states;
 
         NFA::copy_into(&mut new_nfa, c2);
-        new_nfa.add_epsilon_transition(initial_state, c2.initial_state + offset);
-        for c2_final in c2.final_states.iter() {
-            new_nfa.add_epsilon_transition(*c2_final + offset, final_state);
+        new_nfa.add_epsilon_transition(start_state, c2.start_state + offset);
+        for c2_final in c2.accepting_states.iter() {
+            new_nfa.add_epsilon_transition(*c2_final + offset, accepting_state);
         }
 
         new_nfa
     }
 
     /// Construct a new NFA for the concatenation operator of two NFAs. The start state of the
-    /// preceding NFA becomes the start state of the new NFA. The final states of the following NFA
-    /// are the final states of the new NFA. There are epsilon transitions from the final states of
+    /// preceding NFA becomes the start state of the new NFA. The accepting states of the following NFA
+    /// are the accepting states of the new NFA. There are epsilon transitions from the final states of
     /// the former to the start state of the latter.
     #[inline]
     pub fn concatenation(c1: &NFA<T>, c2: &NFA<T>) -> NFA<T> {
@@ -119,15 +119,15 @@ where
         let offset = new_nfa.total_states;
         NFA::copy_into(&mut new_nfa, &c2);
 
-        // Epsilon transitions from c1 finals to initial of c2
-        for c1_final in c1.final_states.iter() {
-            new_nfa.add_epsilon_transition(*c1_final, c2.initial_state + offset);
+        // Epsilon transitions from c1 finals to start of c2
+        for c1_final in c1.accepting_states.iter() {
+            new_nfa.add_epsilon_transition(*c1_final, c2.start_state + offset);
         }
-        new_nfa.final_states = HashSet::new();
+        new_nfa.accepting_states = HashSet::new();
 
-        // Set final states
-        for c2_final in c2.final_states.iter() {
-            new_nfa.final_states.insert(c2_final + offset);
+        // Set accepting states
+        for c2_final in c2.accepting_states.iter() {
+            new_nfa.accepting_states.insert(c2_final + offset);
         }
 
         new_nfa
@@ -140,30 +140,30 @@ where
         let offset = new_nfa.total_states;
 
         NFA::copy_into(&mut new_nfa, &c1);
-        new_nfa.add_epsilon_transition(new_nfa.initial_state, c1.initial_state + offset);
+        new_nfa.add_epsilon_transition(new_nfa.start_state, c1.start_state + offset);
 
-        for c1_final in c1.final_states.iter() {
-            new_nfa.add_epsilon_transition(c1_final + offset, c1.initial_state + offset);
-            for final_state in new_nfa.final_states.clone().iter() {
-                new_nfa.add_epsilon_transition(c1_final + offset, *final_state);
+        for c1_final in c1.accepting_states.iter() {
+            new_nfa.add_epsilon_transition(c1_final + offset, c1.start_state + offset);
+            for accepting_state in new_nfa.accepting_states.clone().iter() {
+                new_nfa.add_epsilon_transition(c1_final + offset, *accepting_state);
             }
         }
 
         new_nfa
     }
 
-    /// Construct a new NFA with epsilon transitions from the initial state to the initial states
-    /// of each child. The final states of the new NFA are the final states of the children.
+    /// Construct a new NFA with epsilon transitions from the start state to the initial states
+    /// of each child. The accepting states of the new NFA are the final states of the children.
     #[inline]
     pub fn combine(cc: &[&NFA<T>]) -> NFA<T> {
         let mut new_nfa = NFA::new();
         let mut offset = new_nfa.total_states;
         for c in cc {
             NFA::copy_into(&mut new_nfa, c);
-            new_nfa.add_epsilon_transition(new_nfa.initial_state, c.initial_state + offset);
+            new_nfa.add_epsilon_transition(new_nfa.start_state, c.start_state + offset);
 
-            for c_final in c.final_states.iter() {
-                new_nfa.final_states.insert(c_final + offset);
+            for c_final in c.accepting_states.iter() {
+                new_nfa.accepting_states.insert(c_final + offset);
             }
             offset += c.total_states;
         }
@@ -177,7 +177,7 @@ where
     pub fn add_state(&mut self, is_final: bool) -> usize {
         let label = self.total_states;
         if is_final {
-            self.final_states.insert(label);
+            self.accepting_states.insert(label);
         }
 
         self.total_states += 1;
@@ -210,8 +210,8 @@ where
     }
 
     #[inline]
-    pub fn is_final_state(&self, label: &usize) -> bool {
-        self.final_states.contains(label)
+    pub fn is_accepting_state(&self, label: &usize) -> bool {
+        self.accepting_states.contains(label)
     }
 
     /// Returns the transitions and destinations from a specific state.
@@ -273,8 +273,8 @@ impl<T: Clone + Eq + Hash> Clone for NFA<T> {
     fn clone(&self) -> Self {
         NFA {
             total_states: self.total_states,
-            initial_state: self.initial_state,
-            final_states: self.final_states.clone(),
+            start_state: self.start_state,
+            accepting_states: self.accepting_states.clone(),
             transition: self.transition.clone(),
         }
     }
@@ -291,14 +291,14 @@ where
         T: PartialEq<I::Item>,
         I: IntoIterator,
     {
-        let mut state_set = self.epsilon_closure(self.initial_state);
+        let mut state_set = self.epsilon_closure(self.start_state);
 
         for is in input.into_iter() {
             let moved_set = self.move_set(&state_set, &is);
             state_set = self.epsilon_closure_set(&moved_set);
         }
 
-        state_set.iter().any(|s| self.is_final_state(s))
+        state_set.iter().any(|s| self.is_accepting_state(s))
     }
 
     #[inline]
@@ -374,14 +374,14 @@ where
             }
         }
 
-        let mut last_match = if self.is_final_state(&self.initial_state) {
+        let mut last_match = if self.is_accepting_state(&self.start_state) {
             Some(MatchRc::new(start, start, vec![]))
         } else {
             None
         };
 
         if !(shortest && last_match.is_some()) {
-            let mut state_set = self.epsilon_closure(self.initial_state);
+            let mut state_set = self.epsilon_closure(self.start_state);
 
             let input = input.into_iter().skip(start);
             let mut span = Vec::new();
@@ -392,7 +392,7 @@ where
                 let is_rc = Rc::new(is);
                 span.push(is_rc);
 
-                if state_set.iter().any(|s| self.is_final_state(s)) {
+                if state_set.iter().any(|s| self.is_accepting_state(s)) {
                     last_match = Some(MatchRc::new(start, i + 1, span.clone()));
                     if shortest {
                         break;
