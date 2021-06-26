@@ -289,24 +289,6 @@ where
     }
 
     #[inline]
-    pub fn has_match<I>(&self, input: I) -> bool
-    where
-        T: PartialEq<I::Item>,
-        I: IntoIterator,
-    {
-        self.has_match_at(input, 0)
-    }
-
-    #[inline]
-    pub fn has_match_at<I>(&self, input: I, start: usize) -> bool
-    where
-        T: PartialEq<I::Item>,
-        I: IntoIterator,
-    {
-        self.find_shortest_at(input, start).is_some()
-    }
-
-    #[inline]
     pub fn find_shortest<I>(&self, input: I) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
