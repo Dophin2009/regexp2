@@ -12,13 +12,13 @@ pub struct DFA<T>
 where
     T: Clone + Eq + Hash,
 {
-    /// A DFA has a single initial state.
-    pub initial_state: usize,
+    /// A DFA has a single start state.
+    pub start_state: usize,
     /// The number of total states in the DFA. There is a state labeled i for every i where 0 <= i
     /// < total_states.
     pub total_states: usize,
     /// The set of accepting states.
-    pub final_states: HashSet<usize>,
+    pub accepting_states: HashSet<usize>,
     /// A lookup table for transitions between states.
     pub transition: Table<usize, Transition<T>, usize>,
 }
@@ -32,13 +32,13 @@ impl<T> DFA<T>
 where
     T: Clone + Eq + Hash,
 {
-    /// Create a new DFA with a single initial state.
+    /// Create a new DFA with a single start state.
     #[inline]
     pub fn new() -> Self {
         Self {
-            initial_state: 0,
+            start_state: 0,
             total_states: 1,
-            final_states: HashSet::new(),
+            accepting_states: HashSet::new(),
             transition: Table::new(),
         }
     }
@@ -63,7 +63,7 @@ where
         let label = self.total_states;
         self.total_states += 1;
         if is_final {
-            self.final_states.insert(label);
+            self.accepting_states.insert(label);
         }
         label
     }
@@ -84,8 +84,8 @@ where
     }
 
     #[inline]
-    pub fn is_final_state(&self, state: &usize) -> bool {
-        self.final_states.iter().any(|s| s == state)
+    pub fn is_accepting_state(&self, state: &usize) -> bool {
+        self.accepting_states.iter().any(|s| s == state)
     }
 }
 
@@ -195,7 +195,7 @@ where
     I: Iterator,
 {
     let current = match *last {
-        None => dfa.initial_state,
+        None => dfa.start_state,
         Some((false, state)) => state,
         // If we were last stuck, return None to indicate that last state was stuck.
         Some((true, _)) => return None,
@@ -217,7 +217,7 @@ where
             let is = input.next().unwrap();
 
             // Check if current state is an accepting one.
-            let is_final = dfa.is_final_state(&next_state);
+            let is_final = dfa.is_accepting_state(&next_state);
 
             *last = Some((false, next_state));
             Some(IterState::Normal(is, next_state, is_final))
@@ -248,7 +248,7 @@ where
             Some(IterState::Stuck(_)) => false,
             // None means that no movement happened; check if the current state (start state) is an
             // accepting state.
-            None => self.is_final_state(&self.initial_state),
+            None => self.is_accepting_state(&self.start_state),
         }
     }
 
@@ -294,7 +294,7 @@ where
         T: PartialEq<I::Item>,
         I: IntoIterator,
     {
-        let mut last_match = if self.is_final_state(&self.initial_state) {
+        let mut last_match = if self.is_accepting_state(&self.start_state) {
             Some(Match::new(start, start, vec![]))
         } else {
             None
