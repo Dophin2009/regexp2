@@ -2,9 +2,46 @@ use crate::class::{CharClass, CharRange};
 use crate::parser::{self, NFAParser, Parser};
 
 use std::convert::TryInto;
+use std::ops::Range;
 
-pub use automata::Match;
-use automata::{convert::Disjoin, nfa::Transition, DFA, NFA};
+use automata::{self, convert::Disjoin, nfa::Transition, DFA, NFA};
+
+#[derive(Debug)]
+pub struct Match {
+    start: usize,
+    end: usize,
+
+    pub span: String,
+}
+
+impl Match {
+    #[inline]
+    pub const fn new(start: usize, end: usize, span: String) -> Self {
+        Self { start, end, span }
+    }
+
+    #[inline]
+    pub const fn start(&self) -> usize {
+        self.start
+    }
+
+    #[inline]
+    pub const fn end(&self) -> usize {
+        self.end
+    }
+
+    #[inline]
+    pub const fn range(&self) -> Range<usize> {
+        self.start..self.end
+    }
+}
+
+impl From<automata::Match<char>> for Match {
+    #[inline]
+    fn from(m: automata::Match<char>) -> Self {
+        Self::new(m.start(), m.end(), m.span.into_iter().collect())
+    }
+}
 
 /// A compiled regular expression for matching strings. It may be used to determine if given
 /// strings are within the language described by the regular expression.
@@ -30,22 +67,22 @@ impl<E: Engine> RegExp<E> {
     }
 
     #[inline]
-    pub fn find(&self, input: &str) -> Option<Match<char>> {
+    pub fn find(&self, input: &str) -> Option<Match> {
         self.find_at(input, 0)
     }
 
     #[inline]
-    pub fn find_at(&self, input: &str, start: usize) -> Option<Match<char>> {
+    pub fn find_at(&self, input: &str, start: usize) -> Option<Match> {
         self.engine.find_at(input, start)
     }
 
     #[inline]
-    pub fn find_shortest(&self, input: &str) -> Option<Match<char>> {
+    pub fn find_shortest(&self, input: &str) -> Option<Match> {
         self.find_shortest_at(input, 0)
     }
 
     #[inline]
-    pub fn find_shortest_at(&self, input: &str, start: usize) -> Option<Match<char>> {
+    pub fn find_shortest_at(&self, input: &str, start: usize) -> Option<Match> {
         self.engine.find_shortest_at(input, start)
     }
 }
@@ -98,9 +135,9 @@ impl From<CharClass> for Transition<CharClass> {
 pub trait Engine {
     fn is_match(&self, input: &str) -> bool;
 
-    fn find_at(&self, input: &str, start: usize) -> Option<Match<char>>;
+    fn find_at(&self, input: &str, start: usize) -> Option<Match>;
 
-    fn find_shortest_at(&self, input: &str, start: usize) -> Option<Match<char>>;
+    fn find_shortest_at(&self, input: &str, start: usize) -> Option<Match>;
 }
 
 impl Engine for NFA<CharClass> {
@@ -110,13 +147,13 @@ impl Engine for NFA<CharClass> {
     }
 
     #[inline]
-    fn find_shortest_at(&self, input: &str, start: usize) -> Option<Match<char>> {
-        NFA::find_shortest_at(self, input.chars(), start)
+    fn find_shortest_at(&self, input: &str, start: usize) -> Option<Match> {
+        NFA::find_shortest_at(self, input.chars(), start).map(From::from)
     }
 
     #[inline]
-    fn find_at(&self, input: &str, start: usize) -> Option<Match<char>> {
-        NFA::find_at(self, input.chars(), start)
+    fn find_at(&self, input: &str, start: usize) -> Option<Match> {
+        NFA::find_at(self, input.chars(), start).map(From::from)
     }
 }
 
@@ -127,13 +164,13 @@ impl Engine for DFA<CharClass> {
     }
 
     #[inline]
-    fn find_shortest_at(&self, input: &str, start: usize) -> Option<Match<char>> {
-        DFA::find_shortest_at(self, input.chars(), start)
+    fn find_shortest_at(&self, input: &str, start: usize) -> Option<Match> {
+        DFA::find_shortest_at(self, input.chars(), start).map(From::from)
     }
 
     #[inline]
-    fn find_at(&self, input: &str, start: usize) -> Option<Match<char>> {
-        DFA::find_at(self, input.chars(), start)
+    fn find_at(&self, input: &str, start: usize) -> Option<Match> {
+        DFA::find_at(self, input.chars(), start).map(From::from)
     }
 }
 
