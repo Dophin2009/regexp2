@@ -506,8 +506,8 @@ where
 
         last_match.map(|m| {
             Match::new(
-                m.start,
-                m.end,
+                m.start(),
+                m.end(),
                 m.span
                     .into_iter()
                     .map(|rc| match Rc::try_unwrap(rc) {
