@@ -48,7 +48,7 @@ impl<E: Engine> RegExp<E> {
 impl RegExp<NFA<CharClass>> {
     /// Create a compiled regular expression that uses an NFA to evaluate input strings.
     #[inline]
-    pub fn new(expr: &str) -> parser::Result<Self> {
+    pub fn new_nfa(expr: &str) -> parser::Result<Self> {
         let parser = NFAParser::new();
         let nfa: NFA<CharClass> = parser.parse(expr)?.unwrap();
 
@@ -57,20 +57,21 @@ impl RegExp<NFA<CharClass>> {
             engine: nfa,
         })
     }
+
+    #[inline]
+    pub fn with_dfa(self) -> RegExp<DFA<CharClass>> {
+        RegExp {
+            expr: self.expr,
+            engine: self.engine.into(),
+        }
+    }
 }
 
 impl RegExp<DFA<CharClass>> {
     /// Create a compiled regular expression that uses a DFA to evaluate input strings.
     #[inline]
-    pub fn new_with_dfa(expr: &str) -> parser::Result<Self> {
-        let parser = NFAParser::new();
-        let nfa: NFA<CharClass> = parser.parse(expr)?.unwrap();
-        let dfa = nfa.into();
-
-        Ok(RegExp {
-            expr: expr.to_owned(),
-            engine: dfa,
-        })
+    pub fn new(expr: &str) -> parser::Result<Self> {
+        Ok(RegExp::new_nfa(expr)?.with_dfa())
     }
 }
 

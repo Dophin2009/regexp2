@@ -3,8 +3,8 @@
 macro_rules! run_tests {
     ($exprs:expr, $valids:expr, $invalids:expr) => {{
         $exprs.iter().for_each(|&expr| {
-            let nfa_re = RegExp::new(expr).unwrap();
-            let dfa_re = RegExp::new_with_dfa(expr).unwrap();
+            let nfa_re = RegExp::new_nfa(expr).unwrap();
+            let dfa_re = RegExp::new(expr).unwrap();
             $valids.iter().for_each(|s| {
                 assert!(
                     nfa_re.is_match(s),
