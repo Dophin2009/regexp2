@@ -1,7 +1,9 @@
 use crate::matching::Match;
 use crate::table::Table;
 
+use std::borrow::Cow;
 use std::hash::Hash;
+use std::iter::Peekable;
 use std::{
     collections::{HashMap, HashSet},
     rc::Rc,
@@ -265,6 +267,140 @@ where
         }
         set
     }
+
+    #[inline]
+    pub fn iter_on<I>(&self, input: I) -> Iter<'_, T, I::IntoIter>
+    where
+        I: IntoIterator,
+        T: PartialEq<I::Item>,
+    {
+        Iter {
+            nfa: &self,
+            input: input.into_iter().peekable(),
+            last: None,
+        }
+    }
+
+    #[inline]
+    pub fn into_iter_on<I>(self, input: I) -> IntoIter<T, I::IntoIter>
+    where
+        I: IntoIterator,
+        T: PartialEq<I::Item>,
+    {
+        IntoIter {
+            nfa: self,
+            input: input.into_iter().peekable(),
+            last: None,
+        }
+    }
+}
+
+pub struct Iter<'a, T, I>
+where
+    T: Clone + Eq + Hash,
+    T: PartialEq<I::Item>,
+    I: Iterator,
+{
+    nfa: &'a NFA<T>,
+
+    input: Peekable<I>,
+    last: Option<(bool, HashSet<usize>)>,
+}
+
+impl<'a, T, I> Iterator for Iter<'a, T, I>
+where
+    T: Clone + Eq + Hash,
+    T: PartialEq<I::Item>,
+    I: Iterator,
+{
+    type Item = IterState<I>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        iter_on_next(&self.nfa, &mut self.input, &mut self.last)
+    }
+}
+
+pub struct IntoIter<T, I>
+where
+    T: Clone + Eq + Hash,
+    T: PartialEq<I::Item>,
+    I: Iterator,
+{
+    nfa: NFA<T>,
+
+    input: Peekable<I>,
+    last: Option<(bool, HashSet<usize>)>,
+}
+
+impl<T, I> Iterator for IntoIter<T, I>
+where
+    T: Clone + Eq + Hash,
+    T: PartialEq<I::Item>,
+    I: Iterator,
+{
+    type Item = IterState<I>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        iter_on_next(&self.nfa, &mut self.input, &mut self.last)
+    }
+}
+
+#[derive(Debug)]
+pub enum IterState<I>
+where
+    I: Iterator,
+{
+    Normal(I::Item, HashMap<usize, bool>),
+    Stuck(HashSet<usize>),
+}
+
+#[inline]
+fn iter_on_next<T, I>(
+    nfa: &NFA<T>,
+    input: &mut Peekable<I>,
+    last: &mut Option<(bool, HashSet<usize>)>,
+) -> Option<IterState<I>>
+where
+    T: Clone + Eq + Hash,
+    T: PartialEq<I::Item>,
+    I: Iterator,
+{
+    let current_set = match last {
+        None => Cow::Owned(nfa.epsilon_closure(nfa.start_state)),
+        Some((false, set)) => Cow::Borrowed(set),
+        // If we were last stuck, return None to indicate that last state was stuck.
+        Some((true, _)) => return None,
+    };
+
+    let peek_is = match input.peek() {
+        Some(v) => v,
+        // No more input, so last item was the final.
+        None => return None,
+    };
+
+    let moved_set = nfa.move_set(&current_set, peek_is);
+    let next_set = nfa.epsilon_closure_set(&moved_set);
+
+    let next = if !next_set.is_empty() {
+        // Consume input symbol.
+        let is = input.next().unwrap();
+
+        // Check if states are accepting ones.
+        let next_set_map = next_set
+            .iter()
+            .map(|s| (*s, nfa.is_accepting_state(s)))
+            .collect();
+
+        *last = Some((false, next_set));
+        Some(IterState::Normal(is, next_set_map))
+    } else {
+        *last = Some((true, next_set.clone()));
+        Some(IterState::Stuck(next_set))
+    };
+
+    next
 }
 
 impl<T> NFA<T>
