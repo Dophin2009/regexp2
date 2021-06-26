@@ -28,6 +28,16 @@ pub struct Transition<T>(pub T)
 where
     T: Clone + Eq + Hash;
 
+impl<T> From<T> for Transition<T>
+where
+    T: Clone + Eq + Hash,
+{
+    #[inline]
+    fn from(t: T) -> Self {
+        Self(t)
+    }
+}
+
 impl<T> DFA<T>
 where
     T: Clone + Eq + Hash,
@@ -69,11 +79,14 @@ where
     }
 
     #[inline]
-    pub fn add_transition(&mut self, start: usize, end: usize, label: Transition<T>) -> Option<()> {
+    pub fn add_transition<U>(&mut self, start: usize, end: usize, label: U) -> Option<()>
+    where
+        U: Into<Transition<T>>,
+    {
         if self.total_states < start + 1 || self.total_states < end + 1 {
             None
         } else {
-            self.transition.set(start, label, end);
+            self.transition.set(start, label.into(), end);
             Some(())
         }
     }
@@ -311,23 +324,26 @@ where
         let mut last_match = None;
         let iter = self.iter_on(input).skip(start).enumerate();
 
-        let mut span = Vec::new();
-        for (i, iter_state) in iter {
-            let is_final = match iter_state {
-                IterState::Start(_, is_final) => is_final,
-                IterState::Normal(is, _, is_final) => {
-                    let is_rc = Rc::new(is);
-                    span.push(is_rc);
+        // Ensure span dropped before unwrapping Rc's.
+        {
+            let mut span = Vec::new();
+            for (i, iter_state) in iter {
+                let is_final = match iter_state {
+                    IterState::Start(_, is_final) => is_final,
+                    IterState::Normal(is, _, is_final) => {
+                        let is_rc = Rc::new(is);
+                        span.push(is_rc);
 
-                    is_final
-                }
-                IterState::Stuck(_) => break,
-            };
+                        is_final
+                    }
+                    IterState::Stuck(_) => break,
+                };
 
-            if is_final {
-                last_match = Some(Match::new(start, i + 1, span.clone()));
-                if shortest {
-                    break;
+                if is_final {
+                    last_match = Some(Match::new(start, i + 1, span.clone()));
+                    if shortest {
+                        break;
+                    }
                 }
             }
         }

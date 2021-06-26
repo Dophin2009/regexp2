@@ -483,23 +483,26 @@ where
         let mut last_match = None;
         let iter = self.iter_on(input).skip(start).enumerate();
 
-        let mut span = Vec::new();
-        for (i, iter_state) in iter {
-            let is_final = match iter_state {
-                IterState::Start(state_map) => state_map.values().any(|&b| b),
-                IterState::Normal(is, state_map) => {
-                    let is_rc = Rc::new(is);
-                    span.push(is_rc);
+        // Ensure span dropped before unwrapping Rc's.
+        {
+            let mut span = Vec::new();
+            for (i, iter_state) in iter {
+                let is_final = match iter_state {
+                    IterState::Start(state_map) => state_map.values().any(|&b| b),
+                    IterState::Normal(is, state_map) => {
+                        let is_rc = Rc::new(is);
+                        span.push(is_rc);
 
-                    state_map.values().any(|&b| b)
-                }
-                IterState::Stuck(_) => break,
-            };
+                        state_map.values().any(|&b| b)
+                    }
+                    IterState::Stuck(_) => break,
+                };
 
-            if is_final {
-                last_match = Some(Match::new(start, i + 1, span.clone()));
-                if shortest {
-                    break;
+                if is_final {
+                    last_match = Some(Match::new(start, i + 1, span.clone()));
+                    if shortest {
+                        break;
+                    }
                 }
             }
         }
