@@ -414,14 +414,14 @@ where
         T: PartialEq<I::Item>,
         I: IntoIterator,
     {
-        let mut state_set = self.epsilon_closure(self.start_state);
-
-        for is in input.into_iter() {
-            let moved_set = self.move_set(&state_set, &is);
-            state_set = self.epsilon_closure_set(&moved_set);
+        match self.iter_on(input).last() {
+            Some(IterState::Normal(_, state_map)) => state_map.values().any(|&b| b),
+            Some(IterState::Stuck(_)) => false,
+            None => self
+                .epsilon_closure(self.start_state)
+                .iter()
+                .any(|s| self.is_accepting_state(s)),
         }
-
-        state_set.iter().any(|s| self.is_accepting_state(s))
     }
 
     #[inline]
