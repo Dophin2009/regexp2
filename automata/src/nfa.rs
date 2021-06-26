@@ -10,7 +10,7 @@ use std::{
 include!("macros.rs");
 
 /// A non-deterministic finite automaton, or NFA.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct NFA<T: Clone + Eq + Hash> {
     /// An NFA has a single start state.
     pub start_state: usize,
@@ -264,19 +264,6 @@ where
             set = set.union(&input_transitions).cloned().collect();
         }
         set
-    }
-}
-
-impl<T: Clone + Eq + Hash> Clone for NFA<T> {
-    /// Clone the NFA.
-    #[inline]
-    fn clone(&self) -> Self {
-        NFA {
-            total_states: self.total_states,
-            start_state: self.start_state,
-            accepting_states: self.accepting_states.clone(),
-            transition: self.transition.clone(),
-        }
     }
 }
 
