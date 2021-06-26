@@ -321,7 +321,7 @@ where
         T: PartialEq<I::Item>,
         I: IntoIterator,
     {
-        self._find_at(input, start, true)
+        self.find_at_impl(input, start, true)
     }
 
     #[inline]
@@ -339,30 +339,17 @@ where
         T: PartialEq<I::Item>,
         I: IntoIterator,
     {
-        self._find_at(input, start, false)
+        self.find_at_impl(input, start, false)
     }
 
     #[inline]
-    fn _find_at<I>(&self, input: I, start: usize, shortest: bool) -> Option<Match<I::Item>>
+    fn find_at_impl<I>(&self, input: I, start: usize, shortest: bool) -> Option<Match<I::Item>>
     where
         T: PartialEq<I::Item>,
         I: IntoIterator,
     {
-        struct MatchRc<T> {
-            start: usize,
-            end: usize,
-            span: Vec<Rc<T>>,
-        }
-
-        impl<T> MatchRc<T> {
-            #[inline]
-            fn new(start: usize, end: usize, span: Vec<Rc<T>>) -> Self {
-                Self { start, end, span }
-            }
-        }
-
         let mut last_match = if self.is_accepting_state(&self.start_state) {
-            Some(MatchRc::new(start, start, vec![]))
+            Some(Match::new(start, start, vec![]))
         } else {
             None
         };
@@ -380,7 +367,7 @@ where
                 span.push(is_rc);
 
                 if state_set.iter().any(|s| self.is_accepting_state(s)) {
-                    last_match = Some(MatchRc::new(start, i + 1, span.clone()));
+                    last_match = Some(Match::new(start, i + 1, span.clone()));
                     if shortest {
                         break;
                     }
@@ -388,7 +375,7 @@ where
             }
         }
 
-        last_match.map(|m: MatchRc<I::Item>| {
+        last_match.map(|m| {
             Match::new(
                 m.start,
                 m.end,
@@ -397,7 +384,7 @@ where
                     .map(|rc| match Rc::try_unwrap(rc) {
                         Ok(v) => v,
                         // Shouldn't ever have any lingering references.
-                        Err(_) => unreachable!(),
+                        Err(_) => unreachable!("Match Rc somehow had lingering references"),
                     })
                     .collect(),
             )
