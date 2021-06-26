@@ -17,6 +17,11 @@ pub struct RegExp<E: Engine> {
 }
 
 impl<E: Engine> RegExp<E> {
+    #[inline]
+    pub fn as_str(&self) -> &str {
+        &self.expr
+    }
+
     /// Determine if the given input string is within the language described by the regular
     /// expression.
     #[inline]
