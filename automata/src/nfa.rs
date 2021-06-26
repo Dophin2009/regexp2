@@ -1,7 +1,6 @@
 use crate::matching::Match;
 use crate::table::Table;
 
-use std::borrow::Cow;
 use std::hash::Hash;
 use std::iter::Peekable;
 use std::{
@@ -304,7 +303,7 @@ where
     nfa: &'a NFA<T>,
 
     input: Peekable<I>,
-    last: Option<(bool, HashSet<usize>)>,
+    last: Option<(LastIterState, HashSet<usize>)>,
 }
 
 impl<'a, T, I> Iterator for Iter<'a, T, I>
@@ -330,7 +329,7 @@ where
     nfa: NFA<T>,
 
     input: Peekable<I>,
-    last: Option<(bool, HashSet<usize>)>,
+    last: Option<(LastIterState, HashSet<usize>)>,
 }
 
 impl<T, I> Iterator for IntoIter<T, I>
@@ -352,15 +351,22 @@ pub enum IterState<I>
 where
     I: Iterator,
 {
+    Start(HashMap<usize, bool>),
     Normal(I::Item, HashMap<usize, bool>),
     Stuck(HashSet<usize>),
+}
+
+enum LastIterState {
+    Start,
+    Normal,
+    Stuck,
 }
 
 #[inline]
 fn iter_on_next<T, I>(
     nfa: &NFA<T>,
     input: &mut Peekable<I>,
-    last: &mut Option<(bool, HashSet<usize>)>,
+    last: &mut Option<(LastIterState, HashSet<usize>)>,
 ) -> Option<IterState<I>>
 where
     T: Clone + Eq + Hash,
@@ -368,10 +374,19 @@ where
     I: Iterator,
 {
     let current_set = match last {
-        None => Cow::Owned(nfa.epsilon_closure(nfa.start_state)),
-        Some((false, set)) => Cow::Borrowed(set),
+        None => {
+            let starting_set = nfa.epsilon_closure(nfa.start_state);
+            let starting_set_map = starting_set
+                .iter()
+                .map(|s| (*s, nfa.is_accepting_state(s)))
+                .collect();
+
+            *last = Some((LastIterState::Start, starting_set));
+            return Some(IterState::Start(starting_set_map));
+        }
+        Some((LastIterState::Start | LastIterState::Normal, set)) => set,
         // If we were last stuck, return None to indicate that last state was stuck.
-        Some((true, _)) => return None,
+        Some((LastIterState::Stuck, _)) => return None,
     };
 
     let peek_is = match input.peek() {
@@ -393,10 +408,10 @@ where
             .map(|s| (*s, nfa.is_accepting_state(s)))
             .collect();
 
-        *last = Some((false, next_set));
+        *last = Some((LastIterState::Normal, next_set));
         Some(IterState::Normal(is, next_set_map))
     } else {
-        *last = Some((true, next_set.clone()));
+        *last = Some((LastIterState::Stuck, next_set.clone()));
         Some(IterState::Stuck(next_set))
     };
 
@@ -415,12 +430,11 @@ where
         I: IntoIterator,
     {
         match self.iter_on(input).last() {
-            Some(IterState::Normal(_, state_map)) => state_map.values().any(|&b| b),
+            Some(IterState::Start(state_map) | IterState::Normal(_, state_map)) => {
+                state_map.values().any(|&b| b)
+            }
             Some(IterState::Stuck(_)) => false,
-            None => self
-                .epsilon_closure(self.start_state)
-                .iter()
-                .any(|s| self.is_accepting_state(s)),
+            None => unreachable!(),
         }
     }
 
@@ -466,29 +480,26 @@ where
         T: PartialEq<I::Item>,
         I: IntoIterator,
     {
-        let mut last_match = if self.is_accepting_state(&self.start_state) {
-            Some(Match::new(start, start, vec![]))
-        } else {
-            None
-        };
+        let mut last_match = None;
+        let iter = self.iter_on(input).skip(start).enumerate();
 
-        if !(shortest && last_match.is_some()) {
-            let mut state_set = self.epsilon_closure(self.start_state);
+        let mut span = Vec::new();
+        for (i, iter_state) in iter {
+            let is_final = match iter_state {
+                IterState::Start(state_map) => state_map.values().any(|&b| b),
+                IterState::Normal(is, state_map) => {
+                    let is_rc = Rc::new(is);
+                    span.push(is_rc);
 
-            let input = input.into_iter().skip(start);
-            let mut span = Vec::new();
-            for (i, is) in input.enumerate() {
-                let moved_set = self.move_set(&state_set, &is);
-                state_set = self.epsilon_closure_set(&moved_set);
+                    state_map.values().any(|&b| b)
+                }
+                IterState::Stuck(_) => break,
+            };
 
-                let is_rc = Rc::new(is);
-                span.push(is_rc);
-
-                if state_set.iter().any(|s| self.is_accepting_state(s)) {
-                    last_match = Some(Match::new(start, i + 1, span.clone()));
-                    if shortest {
-                        break;
-                    }
+            if is_final {
+                last_match = Some(Match::new(start, i + 1, span.clone()));
+                if shortest {
+                    break;
                 }
             }
         }
