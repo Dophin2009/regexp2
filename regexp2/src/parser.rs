@@ -2,13 +2,12 @@ use crate::ast::{self, ASTNode};
 use crate::class::{CharClass, CharRange};
 
 use std::convert::{TryFrom, TryInto};
-use std::error;
-use std::fmt;
 use std::hash::Hash;
 use std::marker::PhantomData;
 use std::result;
 
 use automata::{nfa::Transition, NFA};
+use thiserror::Error;
 
 /// Alias for [std::result::Result] for [ParseError].
 pub type Result<T> = result::Result<T, ParseError>;
@@ -871,30 +870,15 @@ where
 }
 
 /// Error returned when attempting to parse an invalid regular expression.
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum ParseError {
     /// There are an invalid number of operators, or operands are missing.
+    #[error("encountered unbalanced operators")]
     UnbalancedOperators,
     /// There are one or more sets of unclosed parentheses.
+    #[error("encountered unbalanced operators")]
     UnbalancedParentheses,
     /// Bracketed character classes may not empty.
+    #[error("encountered an empty character class")]
     EmptyCharacterClass,
-}
-
-impl fmt::Display for ParseError {
-    #[inline]
-    fn fmt<'a>(&self, f: &mut fmt::Formatter<'a>) -> fmt::Result {
-        match *self {
-            Self::UnbalancedOperators => write!(f, "unbalanced operators"),
-            Self::UnbalancedParentheses => write!(f, "unbalanced parentheses"),
-            Self::EmptyCharacterClass => write!(f, "empty character class"),
-        }
-    }
-}
-
-impl error::Error for ParseError {
-    #[inline]
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        None
-    }
 }
