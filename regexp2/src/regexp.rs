@@ -25,16 +25,6 @@ impl<E: Engine> RegExp<E> {
     }
 
     #[inline]
-    pub fn has_match(&self, input: &str) -> bool {
-        self.has_match_at(input, 0)
-    }
-
-    #[inline]
-    pub fn has_match_at(&self, input: &str, start: usize) -> bool {
-        self.find_shortest_at(input, start).is_some()
-    }
-
-    #[inline]
     pub fn find(&self, input: &str) -> Option<Match<char>> {
         self.find_at(input, 0)
     }
