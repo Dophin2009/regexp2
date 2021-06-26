@@ -131,7 +131,7 @@ where
     dfa: &'a DFA<T>,
 
     input: Peekable<I>,
-    last: Option<(bool, usize)>,
+    last: Option<(LastIterState, usize)>,
 }
 
 impl<'a, T, I> Iterator for Iter<'a, T, I>
@@ -157,7 +157,7 @@ where
     dfa: DFA<T>,
 
     input: Peekable<I>,
-    last: Option<(bool, usize)>,
+    last: Option<(LastIterState, usize)>,
 }
 
 impl<T, I> Iterator for IntoIter<T, I>
@@ -179,15 +179,22 @@ pub enum IterState<I>
 where
     I: Iterator,
 {
+    Start(usize, bool),
     Normal(I::Item, usize, bool),
     Stuck(usize),
+}
+
+enum LastIterState {
+    Start,
+    Normal,
+    Stuck,
 }
 
 #[inline]
 fn iter_on_next<T, I>(
     dfa: &DFA<T>,
     input: &mut Peekable<I>,
-    last: &mut Option<(bool, usize)>,
+    last: &mut Option<(LastIterState, usize)>,
 ) -> Option<IterState<I>>
 where
     T: Clone + Eq + Hash,
@@ -195,10 +202,17 @@ where
     I: Iterator,
 {
     let current = match *last {
-        None => dfa.start_state,
-        Some((false, state)) => state,
+        // First iteration, return start.
+        None => {
+            *last = Some((LastIterState::Start, dfa.start_state));
+            return Some(IterState::Start(
+                dfa.start_state,
+                dfa.is_accepting_state(&dfa.start_state),
+            ));
+        }
+        Some((LastIterState::Start | LastIterState::Normal, state)) => state,
         // If we were last stuck, return None to indicate that last state was stuck.
-        Some((true, _)) => return None,
+        Some((LastIterState::Stuck, _)) => return None,
     };
 
     let peek_is = match input.peek() {
@@ -219,12 +233,12 @@ where
             // Check if current state is an accepting one.
             let is_final = dfa.is_accepting_state(&next_state);
 
-            *last = Some((false, next_state));
+            *last = Some((LastIterState::Normal, next_state));
             Some(IterState::Normal(is, next_state, is_final))
         }
         // No more transitions, so stuck.
         None => {
-            *last = Some((true, current));
+            *last = Some((LastIterState::Stuck, current));
             Some(IterState::Stuck(current))
         }
     };
@@ -244,11 +258,11 @@ where
         I: IntoIterator,
     {
         match self.iter_on(input).last() {
-            Some(IterState::Normal(_, _, is_final)) => is_final,
+            Some(IterState::Start(_, is_final) | IterState::Normal(_, _, is_final)) => is_final,
             Some(IterState::Stuck(_)) => false,
             // None means that no movement happened; check if the current state (start state) is an
             // accepting state.
-            None => self.is_accepting_state(&self.start_state),
+            None => unreachable!(),
         }
     }
 
@@ -294,30 +308,26 @@ where
         T: PartialEq<I::Item>,
         I: IntoIterator,
     {
-        let mut last_match = if self.is_accepting_state(&self.start_state) {
-            Some(Match::new(start, start, vec![]))
-        } else {
-            None
-        };
+        let mut last_match = None;
+        let iter = self.iter_on(input).skip(start).enumerate();
 
-        if !(shortest && last_match.is_some()) {
-            let iter = self.iter_on(input).skip(start).enumerate();
+        let mut span = Vec::new();
+        for (i, iter_state) in iter {
+            let is_final = match iter_state {
+                IterState::Start(_, is_final) => is_final,
+                IterState::Normal(is, _, is_final) => {
+                    let is_rc = Rc::new(is);
+                    span.push(is_rc);
 
-            let mut span = Vec::new();
-            for (i, iter_state) in iter {
-                match iter_state {
-                    IterState::Normal(is, _, is_final) => {
-                        let is_rc = Rc::new(is);
-                        span.push(is_rc);
+                    is_final
+                }
+                IterState::Stuck(_) => break,
+            };
 
-                        if is_final {
-                            last_match = Some(Match::new(start, i + 1, span.clone()));
-                            if shortest {
-                                break;
-                            }
-                        }
-                    }
-                    IterState::Stuck(_) => break,
+            if is_final {
+                last_match = Some(Match::new(start, i + 1, span.clone()));
+                if shortest {
+                    break;
                 }
             }
         }
