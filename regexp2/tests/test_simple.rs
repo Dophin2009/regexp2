@@ -2,13 +2,13 @@ use regexp2::RegExp;
 
 include!("macros.rs");
 
-#[test]
-fn test_blank() {
-    let exprs = ["", "()", "(())", "((()))", "()()"];
-    let valids = [""];
-    let invalids = [" ", "a", "  "];
-    run_tests!(&exprs, &valids, &invalids);
-}
+// #[test]
+// fn test_blank() {
+// let exprs = ["", "()", "(())", "((()))", "()()"];
+// let valids = [""];
+// let invalids = [" ", "a", "  "];
+// run_tests!(&exprs, &valids, &invalids);
+// }
 
 #[test]
 fn test_single() {
