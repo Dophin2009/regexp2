@@ -11,72 +11,12 @@ use automata::NFA;
 /// Alias for [`Result`] for [`ParseError`].
 pub type ParseResult<'r, T> = std::result::Result<T, ParseError<'r>>;
 
-#[derive(Debug, thiserror::Error)]
-#[error("{:?}", .0)]
-pub struct Error<'r>(Vec<ParseError<'r>>);
-
-impl<'r> From<Vec<ParseError<'r>>> for Error<'r> {
-    #[inline]
-    fn from(errors: Vec<ParseError<'r>>) -> Self {
-        Self(errors)
-    }
-}
-
-pub type NFAParser<T> = Parser<NFAParserEngine<T>>;
-
-/// A regular expression parser that produces an NFA that describes the same language as the
-/// regular expression. The transitions of the NFA must be derivable from CharClass.
-pub struct NFAParserEngine<T>
-where
-    T: Clone + Eq + Hash,
-    Transition<T>: From<CharClass>,
-{
-    _phantom: PhantomData<T>,
-}
-
-impl<T> NFAParserEngine<T>
-where
-    T: Clone + Eq + Hash,
-    Transition<T>: From<CharClass>,
-{
-    /// Create a new NFAParser.
-    #[inline]
-    pub fn new() -> Self {
-        NFAParserEngine {
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl<T> Default for NFAParserEngine<T>
-where
-    T: Clone + Eq + Hash,
-    Transition<T>: From<CharClass>,
-{
-    #[inline]
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<T> ParserEngine for NFAParserEngine<T>
-where
-    T: Clone + Eq + Hash,
-    Transition<T>: From<CharClass>,
-{
-    type Output = NFA<T>;
-}
-
 #[derive(Debug)]
 pub struct Parser<E>
 where
     E: ParserEngine,
 {
-    engine: E,
-}
-
-pub trait ParserEngine: Default {
-    type Output;
+    _phantom: PhantomData<E>,
 }
 
 impl<E> Parser<E>
@@ -86,30 +26,58 @@ where
     #[inline]
     pub fn new() -> Self {
         Self {
-            engine: Default::default(),
+            _phantom: PhantomData,
         }
+    }
+
+    #[inline]
+    pub fn parse<'r>(&self, expr: &'r str) -> ParseResult<'r, E::Output> {
+        let mut state: ParserState<E> = ParserState::new();
+        state.parse(expr)
+    }
+}
+
+#[derive(Debug)]
+pub struct ParserState<E>
+where
+    E: ParserEngine,
+{
+    engine: E,
+}
+
+pub trait ParserEngine {
+    type Output;
+
+    fn new() -> Self;
+
+    fn handle_char(&mut self, c: char) -> Self::Output;
+}
+
+impl<E> ParserState<E>
+where
+    E: ParserEngine,
+{
+    #[inline]
+    pub fn new() -> Self {
+        Self { engine: E::new() }
     }
 
     /// Compile a regular expresion.
     #[inline]
-    pub fn parse<'r>(&self, expr: &'r str) -> ParseResult<'r, E::Output> {
+    pub fn parse<'r>(&mut self, expr: &'r str) -> ParseResult<'r, E::Output> {
         let input = &mut ParseInput::new(expr);
         self.parse_expr(input)
     }
 
     #[inline]
-    fn parse_expr<'r>(&self, input: &mut ParseInput<'r>) -> ParseResult<'r, E::Output> {
+    fn parse_expr<'r>(&mut self, input: &mut ParseInput<'r>) -> ParseResult<'r, E::Output> {
         match input.peek() {
             Some((_, c)) => match c {
                 '(' => self.parse_group(input),
                 // '[' => self.parse_class(input)?,
                 _ => {
                     let (_, c) = input.next().unwrap();
-                    Err(ParseError::UnexpectedToken {
-                        span: input.current_span(),
-                        token: c,
-                        expected: vec!['('],
-                    })
+                    Ok(self.engine.handle_char(c))
                 }
             },
             None => Err(ParseError::EmptyExpression {
@@ -119,7 +87,7 @@ where
     }
 
     #[inline]
-    fn parse_group<'r>(&self, input: &mut ParseInput<'r>) -> ParseResult<'r, E::Output> {
+    fn parse_group<'r>(&mut self, input: &mut ParseInput<'r>) -> ParseResult<'r, E::Output> {
         let _lparen = input.next();
         let expr = self.parse_expr(input)?;
         let _rparen = input.next();
@@ -290,5 +258,56 @@ impl<'r> Span<'r> {
     #[inline]
     pub fn text(&self) -> &str {
         self.text
+    }
+}
+
+pub type NFAParser<T> = Parser<NFAParserEngine<T>>;
+
+/// A regular expression parser that produces an NFA that describes the same language as the
+/// regular expression. The transitions of the NFA must be derivable from CharClass.
+pub struct NFAParserEngine<T>
+where
+    T: Clone + Eq + Hash,
+    Transition<T>: From<CharClass>,
+{
+    _phantom: PhantomData<T>,
+}
+
+impl<T> NFAParserEngine<T>
+where
+    T: Clone + Eq + Hash,
+    Transition<T>: From<CharClass>,
+{
+    /// Create a new NFAParser.
+    #[inline]
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
+        NFAParserEngine {
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<T> ParserEngine for NFAParserEngine<T>
+where
+    T: Clone + Eq + Hash,
+    Transition<T>: From<CharClass>,
+{
+    type Output = NFA<T>;
+
+    #[inline]
+    fn new() -> Self {
+        Self::new()
+    }
+
+    #[inline]
+    fn handle_char(&mut self, c: char) -> Self::Output {
+        let class: CharClass = c.into();
+        let transition = class.into();
+
+        let mut nfa = NFA::new();
+        let f = nfa.add_state(true);
+        nfa.add_transition(nfa.start_state, f, transition);
+        nfa
     }
 }
