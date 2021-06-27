@@ -24,6 +24,7 @@ where
     E: ParserEngine,
 {
     #[inline]
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             _phantom: PhantomData,
@@ -57,7 +58,10 @@ impl<E> ParserState<E>
 where
     E: ParserEngine,
 {
+    const EXPR_START_EXPECTED: &'static [char] = &['(', '['];
+
     #[inline]
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self { engine: E::new() }
     }
@@ -66,30 +70,81 @@ where
     #[inline]
     pub fn parse<'r>(&mut self, expr: &'r str) -> ParseResult<'r, E::Output> {
         let input = &mut ParseInput::new(expr);
-        self.parse_expr(input)
+        self.parse_expr(input, 0)
     }
 
     #[inline]
-    fn parse_expr<'r>(&mut self, input: &mut ParseInput<'r>) -> ParseResult<'r, E::Output> {
-        match input.peek() {
-            Some((_, c)) => match c {
-                '(' => self.parse_group(input),
-                // '[' => self.parse_class(input)?,
-                _ => {
-                    let (_, c) = input.next().unwrap();
-                    Ok(self.engine.handle_char(c))
+    fn parse_expr<'r>(
+        &mut self,
+        input: &mut ParseInput<'r>,
+        min_bp: usize,
+    ) -> ParseResult<'r, E::Output> {
+        let mut lhs = None;
+        while lhs.is_none() {
+            lhs = match input.peek() {
+                Some((_, c)) => match c {
+                    '\\' => Some(self.parse_escaped(input)?),
+                    // Beginning of a group.
+                    '(' => self.parse_group(input)?,
+                    ')' | ']' => {
+                        let (_, c) = input.next_unchecked();
+                        return Err(ParseError::UnexpectedToken {
+                            span: input.current_span(),
+                            token: c,
+                            expected: Self::EXPR_START_EXPECTED.into(),
+                        });
+                    }
+                    // '[' => self.parse_class(input)?,
+                    _ => {
+                        let (_, c) = input.next_unchecked();
+                        Some(self.engine.handle_char(c))
+                    }
+                },
+                None => {
+                    return Err(ParseError::EmptyExpression {
+                        span: input.current_span(),
+                    })
                 }
-            },
-            None => Err(ParseError::EmptyExpression {
-                span: input.current_span(),
+            };
+        }
+
+        let lhs = lhs.unwrap();
+        // while let Some((_, c)) = input.peek() {
+        // lhs = match c {
+        // '*' => self.engine.handle_kleene_star(lhs),
+        // }
+        // }
+
+        Ok(lhs)
+    }
+
+    #[inline]
+    fn parse_escaped<'r>(&mut self, input: &mut ParseInput<'r>) -> ParseResult<'r, E::Output> {
+        let _bs = input.next_unchecked();
+        match input.next() {
+            Some((_, c)) => Ok(self.engine.handle_char(c)),
+            None => Err(ParseError::UnexpectedEof {
+                span: input.current_eof_span(),
+                // TODO: How to represent expected any character?
+                expected: vec![],
             }),
         }
     }
 
     #[inline]
-    fn parse_group<'r>(&mut self, input: &mut ParseInput<'r>) -> ParseResult<'r, E::Output> {
-        let _lparen = input.next();
-        let expr = self.parse_expr(input)?;
+    fn parse_group<'r>(
+        &mut self,
+        input: &mut ParseInput<'r>,
+    ) -> ParseResult<'r, Option<E::Output>> {
+        let _lparen = input.next_unchecked();
+
+        let expr = if !input.peek_is(')') {
+            let expr = self.parse_expr(input, 0)?;
+            Some(expr)
+        } else {
+            None
+        };
+
         let _rparen = input.next();
 
         Ok(expr)
@@ -138,6 +193,11 @@ impl<'r> ParseInput<'r> {
                 expected: expected(),
             }),
         }
+    }
+
+    #[inline]
+    pub fn next_unchecked(&mut self) -> (usize, char) {
+        self.next().unwrap()
     }
 
     #[inline]
