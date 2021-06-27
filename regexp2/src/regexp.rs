@@ -1,10 +1,11 @@
 use crate::class::{CharClass, CharRange};
-use crate::parser::{self, NFAParser, Parser};
+use crate::parser::{self, NFAParser};
 
 use std::convert::TryInto;
 use std::ops::Range;
 
 use automata::{self, convert::Disjoin, nfa::Transition, DFA, NFA};
+use parser::ParseResult;
 
 #[derive(Debug)]
 pub struct Match {
@@ -90,9 +91,9 @@ impl<E: Engine> RegExp<E> {
 impl RegExp<NFA<CharClass>> {
     /// Create a compiled regular expression that uses an NFA to evaluate input strings.
     #[inline]
-    pub fn new_nfa(expr: &str) -> parser::Result<Self> {
+    pub fn new_nfa<'r>(expr: &'r str) -> ParseResult<'r, Self> {
         let parser = NFAParser::new();
-        let nfa: NFA<CharClass> = parser.parse(expr)?.unwrap();
+        let nfa: NFA<CharClass> = parser.parse(expr)?;
 
         Ok(RegExp {
             expr: expr.to_owned(),
@@ -112,7 +113,7 @@ impl RegExp<NFA<CharClass>> {
 impl RegExp<DFA<CharClass>> {
     /// Create a compiled regular expression that uses a DFA to evaluate input strings.
     #[inline]
-    pub fn new(expr: &str) -> parser::Result<Self> {
+    pub fn new<'r>(expr: &'r str) -> ParseResult<'r, Self> {
         Ok(RegExp::new_nfa(expr)?.with_dfa())
     }
 }
