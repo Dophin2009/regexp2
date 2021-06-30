@@ -54,6 +54,8 @@ pub trait ParserEngine {
     fn handle_char<C>(&mut self, c: C) -> Self::Output
     where
         C: Into<CharClass>;
+
+    fn handle_wildcard(&mut self) -> Self::Output;
 }
 
 impl<E> ParserState<E>
@@ -89,6 +91,7 @@ where
                     // Beginning of a group.
                     '(' => self.parse_group(input)?,
                     '[' => self.parse_class(input)?,
+                    '.' => Some(self.parse_wildcard(input)?),
                     '*' | '|' => {
                         let (_, c) = input.next_unchecked();
                         return Err(ParseError::UnexpectedToken {
@@ -254,6 +257,18 @@ where
         };
 
         Ok(v)
+    }
+
+    #[inline]
+    fn parse_wildcard_char<'r>(&mut self, input: &mut ParseInput<'r>) -> ParseResult<'r, char> {
+        let (_, c) = input.next_checked('.', || vec!['.'])?;
+        Ok(c)
+    }
+
+    #[inline]
+    fn parse_wildcard<'r>(&mut self, input: &mut ParseInput<'r>) -> ParseResult<'r, E::Output> {
+        let _ = self.parse_wildcard_char(input)?;
+        Ok(self.engine.handle_wildcard())
     }
 }
 
@@ -478,5 +493,11 @@ where
         let f = nfa.add_state(true);
         nfa.add_transition(nfa.start_state, f, transition);
         nfa
+    }
+
+    #[inline]
+    fn handle_wildcard(&mut self) -> Self::Output {
+        let class = CharClass::all_but_newline();
+        self.handle_char(class)
     }
 }
