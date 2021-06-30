@@ -1,4 +1,4 @@
-use crate::class::CharClass;
+use crate::class::{CharClass, CharRange};
 
 use std::hash::Hash;
 use std::iter::Peekable;
@@ -51,7 +51,9 @@ pub trait ParserEngine {
 
     fn new() -> Self;
 
-    fn handle_char(&mut self, c: char) -> Self::Output;
+    fn handle_char<C>(&mut self, c: C) -> Self::Output
+    where
+        C: Into<CharClass>;
 }
 
 impl<E> ParserState<E>
@@ -86,7 +88,8 @@ where
                     '\\' => Some(self.parse_escaped(input)?),
                     // Beginning of a group.
                     '(' => self.parse_group(input)?,
-                    ')' | ']' => {
+                    '[' => self.parse_class(input)?,
+                    '*' | '|' => {
                         let (_, c) = input.next_unchecked();
                         return Err(ParseError::UnexpectedToken {
                             span: input.current_span(),
@@ -94,11 +97,7 @@ where
                             expected: Self::EXPR_START_EXPECTED.into(),
                         });
                     }
-                    // '[' => self.parse_class(input)?,
-                    _ => {
-                        let (_, c) = input.next_unchecked();
-                        Some(self.engine.handle_char(c))
-                    }
+                    _ => Some(self.parse_single(input)?),
                 },
                 None => {
                     return Err(ParseError::EmptyExpression {
@@ -119,14 +118,58 @@ where
     }
 
     #[inline]
+    fn parse_single_char<'r>(&mut self, input: &mut ParseInput<'r>) -> ParseResult<'r, char> {
+        // TODO: Expect any
+        let (_, c) = input.next_unwrap(Vec::new)?;
+        Ok(c)
+    }
+
+    #[inline]
+    fn parse_single<'r>(&mut self, input: &mut ParseInput<'r>) -> ParseResult<'r, E::Output> {
+        let c = self.parse_single_char(input)?;
+        Ok(self.engine.handle_char(c))
+    }
+
+    #[inline]
+    fn parse_escaped_char<'r>(&mut self, input: &mut ParseInput<'r>) -> ParseResult<'r, char> {
+        let _bs = input.next_checked('\\', || vec!['\\']);
+        // TODO: How to represent expected any character?
+        let (_, c) = input.next_unwrap(Vec::new)?;
+        Ok(c)
+    }
+
+    #[inline]
     fn parse_escaped<'r>(&mut self, input: &mut ParseInput<'r>) -> ParseResult<'r, E::Output> {
-        let _bs = input.next_unchecked();
-        match input.next() {
-            Some((_, c)) => Ok(self.engine.handle_char(c)),
+        let c = self.parse_escaped_char(input)?;
+        Ok(self.engine.handle_char(c))
+    }
+
+    #[inline]
+    fn parse_single_or_escaped_char<'r>(
+        &mut self,
+        input: &mut ParseInput<'r>,
+    ) -> ParseResult<'r, char> {
+        match input.peek() {
+            Some((_, '\\')) => self.parse_escaped_char(input),
+            Some((_, _)) => self.parse_single_char(input),
             None => Err(ParseError::UnexpectedEof {
                 span: input.current_eof_span(),
-                // TODO: How to represent expected any character?
-                expected: vec![],
+                expected: vec!['\\'],
+            }),
+        }
+    }
+
+    #[inline]
+    fn parse_single_or_escaped<'r>(
+        &mut self,
+        input: &mut ParseInput<'r>,
+    ) -> ParseResult<'r, E::Output> {
+        match input.peek() {
+            Some((_, '\\')) => self.parse_escaped(input),
+            Some((_, _)) => self.parse_single(input),
+            None => Err(ParseError::UnexpectedEof {
+                span: input.current_eof_span(),
+                expected: vec!['\\'],
             }),
         }
     }
@@ -136,7 +179,7 @@ where
         &mut self,
         input: &mut ParseInput<'r>,
     ) -> ParseResult<'r, Option<E::Output>> {
-        let _lparen = input.next_unchecked();
+        let _lp = input.next_checked('(', || vec!['(']);
 
         let expr = if !input.peek_is(')') {
             let expr = self.parse_expr(input, 0)?;
@@ -145,9 +188,72 @@ where
             None
         };
 
-        let _rparen = input.next();
+        let _rp = input.next_checked(')', || vec![')']);
 
         Ok(expr)
+    }
+
+    #[inline]
+    fn parse_class<'r>(
+        &mut self,
+        input: &mut ParseInput<'r>,
+    ) -> ParseResult<'r, Option<E::Output>> {
+        let _lb = input.next_checked('[', || vec!['['])?;
+
+        let negate = match input.peek() {
+            Some((_, '^')) => {
+                let _caret = input.next_unchecked();
+                true
+            }
+            Some((_, _)) => false,
+            None => {
+                return Err(ParseError::UnexpectedEof {
+                    span: input.current_eof_span(),
+                    // TODO: Expect any
+                    expected: vec![']', '^'],
+                });
+            }
+        };
+
+        let mut class = CharClass::new();
+        while let Some((_, c)) = input.peek() {
+            let start = match c {
+                // LB indicates end of char class.
+                ']' => {
+                    let _rb = input.next_checked(']', || vec!['[']);
+                    break;
+                }
+                _ => self.parse_single_or_escaped_char(input)?,
+            };
+
+            let end = match input.peek() {
+                Some((_, '-')) => {
+                    let _dash = input.next_unchecked();
+                    self.parse_single_or_escaped_char(input)?
+                }
+                Some((_, _)) => start,
+                None => {
+                    return Err(ParseError::UnexpectedEof {
+                        span: input.current_eof_span(),
+                        // TODO Expect any char
+                        expected: vec!['-'],
+                    });
+                }
+            };
+
+            class.add_range(CharRange::new(start, end));
+        }
+
+        let _rb = input.next_checked(']', || vec!['[']);
+
+        let v = if !class.is_empty() {
+            let class = if negate { class.complement() } else { class };
+            Some(self.engine.handle_char(class))
+        } else {
+            None
+        };
+
+        Ok(v)
     }
 }
 
@@ -361,7 +467,10 @@ where
     }
 
     #[inline]
-    fn handle_char(&mut self, c: char) -> Self::Output {
+    fn handle_char<C>(&mut self, c: C) -> Self::Output
+    where
+        C: Into<CharClass>,
+    {
         let class: CharClass = c.into();
         let transition = class.into();
 
