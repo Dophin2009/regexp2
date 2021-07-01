@@ -149,8 +149,12 @@ where
         let c = self.parse_escaped_char(input)?;
         let c = match c {
             'd' => CharClass::decimal_number(),
+            'D' => CharClass::decimal_number().complement(),
             's' => CharClass::whitespace(),
+            'S' => CharClass::whitespace().complement(),
             'w' => CharClass::word(),
+            'W' => CharClass::word().complement(),
+            'n' => CharClass::newline(),
             c => c.into(),
         };
         Ok(c)

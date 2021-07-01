@@ -102,8 +102,13 @@ impl CharClass {
 impl CharClass {
     /// Create a character class of all characters except the newline character.
     #[inline]
+    pub fn newline() -> Self {
+        CharRange::new('\n', '\n').into()
+    }
+
+    #[inline]
     pub fn all_but_newline() -> Self {
-        CharRange::new('\n', '\n').complement().into()
+        Self::newline().complement()
     }
 
     /// Create a character class consisting of all Unicode letter values.
