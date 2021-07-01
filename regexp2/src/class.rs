@@ -75,6 +75,28 @@ impl CharClass {
     pub fn add_range(&mut self, range: CharRange) {
         self.ranges.insert(range);
     }
+
+    #[inline]
+    pub fn add_other(&mut self, class: CharClass) {
+        class.ranges.into_iter().for_each(|r| self.add_range(r));
+    }
+
+    #[inline]
+    pub fn is_single(&self) -> bool {
+        let mut iter = self.ranges.iter();
+        let c = match iter.next() {
+            Some(r) => {
+                if r.start == r.end {
+                    r.start
+                } else {
+                    return false;
+                }
+            }
+            None => return false,
+        };
+
+        iter.all(|range| c == range.start && c == range.end)
+    }
 }
 
 impl CharClass {
@@ -180,6 +202,15 @@ impl Extend<CharRange> for CharClass {
     fn extend<I: IntoIterator<Item = CharRange>>(&mut self, iter: I) {
         for r in iter {
             self.add_range(r);
+        }
+    }
+}
+
+impl Extend<CharClass> for CharClass {
+    #[inline]
+    fn extend<I: IntoIterator<Item = CharClass>>(&mut self, iter: I) {
+        for cc in iter {
+            self.extend(cc.ranges);
         }
     }
 }

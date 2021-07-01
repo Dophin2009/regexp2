@@ -92,7 +92,7 @@ where
                     '(' => self.parse_group(input)?,
                     '[' => self.parse_class(input)?,
                     '.' => Some(self.parse_wildcard(input)?),
-                    '*' | '|' => {
+                    '?' | '*' | '|' => {
                         let (_, c) = input.next_unchecked();
                         return Err(ParseError::UnexpectedToken {
                             span: input.current_span(),
@@ -142,8 +142,23 @@ where
     }
 
     #[inline]
-    fn parse_escaped<'r>(&mut self, input: &mut ParseInput<'r>) -> ParseResult<'r, E::Output> {
+    fn parse_escaped_class<'r>(
+        &mut self,
+        input: &mut ParseInput<'r>,
+    ) -> ParseResult<'r, CharClass> {
         let c = self.parse_escaped_char(input)?;
+        let c = match c {
+            'd' => CharClass::decimal_number(),
+            's' => CharClass::whitespace(),
+            'w' => CharClass::word(),
+            c => c.into(),
+        };
+        Ok(c)
+    }
+
+    #[inline]
+    fn parse_escaped<'r>(&mut self, input: &mut ParseInput<'r>) -> ParseResult<'r, E::Output> {
+        let c = self.parse_escaped_class(input)?;
         Ok(self.engine.handle_char(c))
     }
 
@@ -160,6 +175,24 @@ where
                 expected: vec!['\\'],
             }),
         }
+    }
+
+    #[inline]
+    fn parse_single_or_escaped_class<'r>(
+        &mut self,
+        input: &mut ParseInput<'r>,
+    ) -> ParseResult<'r, CharClass> {
+        let c = match input.peek() {
+            Some((_, '\\')) => self.parse_escaped_class(input)?,
+            Some((_, _)) => self.parse_single_char(input)?.into(),
+            None => {
+                return Err(ParseError::UnexpectedEof {
+                    span: input.current_eof_span(),
+                    expected: vec!['\\'],
+                })
+            }
+        };
+        Ok(c)
     }
 
     #[inline]
@@ -222,33 +255,49 @@ where
         while let Some((_, c)) = input.peek() {
             let start = match c {
                 // LB indicates end of char class.
-                ']' => {
-                    let _rb = input.next_checked(']', || vec!['[']);
-                    break;
-                }
-                _ => self.parse_single_or_escaped_char(input)?,
+                ']' => break,
+                _ => self.parse_single_or_escaped_class(input)?,
             };
 
-            let end = match input.peek() {
+            // If a class is found, add it and start over.
+            // Otherwise, it's the start of a character range.
+            if !start.is_single() {
+                class.add_other(start);
+                continue;
+            }
+
+            match input.peek() {
                 Some((_, '-')) => {
                     let _dash = input.next_unchecked();
-                    self.parse_single_or_escaped_char(input)?
+                    let end = self.parse_single_or_escaped_class(input)?;
+
+                    if !end.is_single() {
+                        // start is a single char, end is a class; add both individually, and dash.
+                        class.add_other(start);
+                        class.add_range(('-', '-').into());
+                        class.add_other(end);
+                    } else {
+                        // start and end are both single chars; create a range.
+                        let s = start.ranges.into_iter().last().unwrap().start;
+                        let e = end.ranges.into_iter().last().unwrap().start;
+                        class.add_range((s, e).into());
+                    }
                 }
-                Some((_, _)) => start,
+                Some((_, _)) => {
+                    let s = start.ranges.into_iter().last().unwrap().start;
+                    class.add_range((s, s).into());
+                }
                 None => {
                     return Err(ParseError::UnexpectedEof {
                         span: input.current_eof_span(),
-                        // TODO Expect any char
-                        expected: vec!['-'],
+                        // TODO expect any char
+                        expected: vec![']', '-'],
                     });
                 }
             };
-
-            class.add_range(CharRange::new(start, end));
         }
 
-        let _rb = input.next_checked(']', || vec!['[']);
-
+        let _rb = input.next_checked(']', || vec![']']);
         let v = if !class.is_empty() {
             let class = if negate { class.complement() } else { class };
             Some(self.engine.handle_char(class))
