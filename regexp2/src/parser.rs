@@ -1,4 +1,5 @@
-use crate::class::{CharClass, CharRange};
+use crate::ast;
+use crate::class::CharClass;
 
 use std::hash::Hash;
 use std::iter::Peekable;
@@ -54,8 +55,13 @@ pub trait ParserEngine {
     fn handle_char<C>(&mut self, c: C) -> Self::Output
     where
         C: Into<CharClass>;
-
     fn handle_wildcard(&mut self) -> Self::Output;
+
+    fn handle_star(&mut self, lhs: Self::Output) -> Self::Output;
+    fn handle_plus(&mut self, lhs: Self::Output) -> Self::Output;
+    fn handle_optional(&mut self, lhs: Self::Output) -> Self::Output;
+    fn handle_concat(&mut self, lhs: Self::Output, rhs: Self::Output) -> Self::Output;
+    fn handle_alternate(&mut self, lhs: Self::Output, rhs: Self::Output) -> Self::Output;
 }
 
 impl<E> ParserState<E>
@@ -74,14 +80,15 @@ where
     #[inline]
     pub fn parse<'r>(&mut self, expr: &'r str) -> ParseResult<'r, E::Output> {
         let input = &mut ParseInput::new(expr);
-        self.parse_expr(input, 0)
+        self.parse_expr(input, 0, false)
     }
 
     #[inline]
     fn parse_expr<'r>(
         &mut self,
         input: &mut ParseInput<'r>,
-        min_bp: usize,
+        min_bp: u8,
+        parenthesized: bool,
     ) -> ParseResult<'r, E::Output> {
         let mut lhs = None;
         while lhs.is_none() {
@@ -90,6 +97,14 @@ where
                     '\\' => Some(self.parse_escaped(input)?),
                     // Beginning of a group.
                     '(' => self.parse_group(input)?,
+                    ')' if !parenthesized => {
+                        let (_, c) = input.next_unchecked();
+                        return Err(ParseError::UnexpectedToken {
+                            span: input.current_span(),
+                            token: c,
+                            expected: Self::EXPR_START_EXPECTED.into(),
+                        });
+                    }
                     '[' => self.parse_class(input)?,
                     '.' => Some(self.parse_wildcard(input)?),
                     '?' | '*' | '|' => {
@@ -110,14 +125,74 @@ where
             };
         }
 
-        let lhs = lhs.unwrap();
-        // while let Some((_, c)) = input.peek() {
-        // lhs = match c {
-        // '*' => self.engine.handle_kleene_star(lhs),
-        // }
-        // }
+        let mut lhs = lhs.unwrap();
+        while let Some((_, c)) = input.peek() {
+            lhs = match c {
+                ')' if parenthesized => break,
+                '*' => {
+                    if self.postfix_bp(&PostfixOp::Star).0 < min_bp {
+                        break;
+                    }
+
+                    let _star = input.next_unchecked();
+                    self.engine.handle_star(lhs)
+                }
+                '+' => {
+                    if self.postfix_bp(&PostfixOp::Plus).0 < min_bp {
+                        break;
+                    }
+
+                    let _plus = input.next_unchecked();
+                    self.engine.handle_plus(lhs)
+                }
+                '?' => {
+                    if self.postfix_bp(&PostfixOp::Optional).0 < min_bp {
+                        break;
+                    }
+
+                    let _question = input.next_unchecked();
+                    self.engine.handle_optional(lhs)
+                }
+                '|' => {
+                    let (lbp, rbp) = self.infix_bp(&InfixOp::Alternate);
+                    if lbp < min_bp {
+                        break;
+                    }
+
+                    let _bar = input.next_unchecked();
+                    let rhs = self.parse_expr(input, rbp, parenthesized)?;
+                    self.engine.handle_alternate(lhs, rhs)
+                }
+                _ => {
+                    let (lbp, rbp) = self.infix_bp(&InfixOp::Concat);
+                    if lbp < min_bp {
+                        break;
+                    }
+
+                    let rhs = self.parse_expr(input, rbp, parenthesized)?;
+                    self.engine.handle_concat(lhs, rhs)
+                }
+            }
+        }
 
         Ok(lhs)
+    }
+
+    #[inline]
+    fn postfix_bp(&self, op: &PostfixOp) -> (u8, ()) {
+        match op {
+            PostfixOp::Star => (9, ()),
+            PostfixOp::Plus => (9, ()),
+            PostfixOp::Optional => (9, ()),
+        }
+    }
+
+    #[inline]
+    fn infix_bp(&self, op: &InfixOp) -> (u8, u8) {
+        match op {
+            InfixOp::Concat => (7, 8),
+            InfixOp::Alternate => (5, 6),
+        }
     }
 
     #[inline]
@@ -219,16 +294,16 @@ where
         &mut self,
         input: &mut ParseInput<'r>,
     ) -> ParseResult<'r, Option<E::Output>> {
-        let _lp = input.next_checked('(', || vec!['(']);
+        let _lp = input.next_checked('(', || vec!['('])?;
 
         let expr = if !input.peek_is(')') {
-            let expr = self.parse_expr(input, 0)?;
+            let expr = self.parse_expr(input, 0, true)?;
             Some(expr)
         } else {
             None
         };
 
-        let _rp = input.next_checked(')', || vec![')']);
+        let _rp = input.next_checked(')', || vec![')'])?;
 
         Ok(expr)
     }
@@ -323,6 +398,17 @@ where
         let _ = self.parse_wildcard_char(input)?;
         Ok(self.engine.handle_wildcard())
     }
+}
+
+enum PostfixOp {
+    Star,
+    Plus,
+    Optional,
+}
+
+enum InfixOp {
+    Alternate,
+    Concat,
 }
 
 struct ParseInput<'r> {
@@ -552,5 +638,112 @@ where
     fn handle_wildcard(&mut self) -> Self::Output {
         let class = CharClass::all_but_newline();
         self.handle_char(class)
+    }
+
+    #[inline]
+    fn handle_star(&mut self, lhs: Self::Output) -> Self::Output {
+        NFA::kleene_star(&lhs)
+    }
+
+    #[inline]
+    fn handle_plus(&mut self, lhs: Self::Output) -> Self::Output {
+        NFA::concatenation(&NFA::kleene_star(&lhs), &lhs)
+    }
+
+    #[inline]
+    fn handle_optional(&mut self, lhs: Self::Output) -> Self::Output {
+        let c1 = NFA::new_epsilon();
+        NFA::union(&c1, &lhs)
+    }
+
+    #[inline]
+    fn handle_concat(&mut self, lhs: Self::Output, rhs: Self::Output) -> Self::Output {
+        NFA::concatenation(&lhs, &rhs)
+    }
+
+    #[inline]
+    fn handle_alternate(&mut self, lhs: Self::Output, rhs: Self::Output) -> Self::Output {
+        NFA::union(&lhs, &rhs)
+    }
+}
+
+pub type ASTParser<T> = Parser<ASTParserEngine<T>>;
+
+/// A regular expression parser that produces an AST that describes the same language as the
+/// regular expression. The transitions of the AST must be derivable from CharClass.
+pub struct ASTParserEngine<T>
+where
+    T: Clone + Eq + Hash,
+    Transition<T>: From<CharClass>,
+{
+    _phantom: PhantomData<T>,
+}
+
+impl<T> ASTParserEngine<T>
+where
+    T: Clone + Eq + Hash,
+    Transition<T>: From<CharClass>,
+{
+    /// Create a new ASTParser.
+    #[inline]
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
+        ASTParserEngine {
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<T> ParserEngine for ASTParserEngine<T>
+where
+    T: Clone + Eq + Hash,
+    Transition<T>: From<CharClass>,
+{
+    type Output = ast::Expr;
+
+    #[inline]
+    fn new() -> Self {
+        Self::new()
+    }
+
+    #[inline]
+    fn handle_char<C>(&mut self, c: C) -> Self::Output
+    where
+        C: Into<CharClass>,
+    {
+        let class: CharClass = c.into();
+        ast::Expr::Atom(class)
+    }
+
+    #[inline]
+    fn handle_wildcard(&mut self) -> Self::Output {
+        let class = CharClass::all_but_newline();
+        self.handle_char(class)
+    }
+
+    #[inline]
+    fn handle_star(&mut self, lhs: Self::Output) -> Self::Output {
+        ast::Expr::Unary(ast::UnaryOp::Star, Box::new(lhs))
+    }
+
+    #[inline]
+    fn handle_plus(&mut self, rhs: Self::Output) -> Self::Output {
+        let lhs = self.handle_star(rhs.clone());
+        self.handle_concat(lhs, rhs)
+    }
+
+    #[inline]
+    fn handle_optional(&mut self, lhs: Self::Output) -> Self::Output {
+        ast::Expr::Unary(ast::UnaryOp::Optional, Box::new(lhs))
+    }
+
+    #[inline]
+    fn handle_concat(&mut self, lhs: Self::Output, rhs: Self::Output) -> Self::Output {
+        ast::Expr::Binary(ast::BinaryOp::Concat, Box::new(lhs), Box::new(rhs))
+    }
+
+    #[inline]
+    fn handle_alternate(&mut self, lhs: Self::Output, rhs: Self::Output) -> Self::Output {
+        ast::Expr::Binary(ast::BinaryOp::Alternate, Box::new(lhs), Box::new(rhs))
     }
 }

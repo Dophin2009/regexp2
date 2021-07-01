@@ -1,17 +1,21 @@
-pub type ASTNode<T> = Node<T, Operator>;
+use crate::class::CharClass;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Node<T, U> {
-    Leaf(T),
-    Branch(U, Box<Self>, Box<Self>),
-    None,
+#[derive(Clone, Debug, PartialEq)]
+pub enum Expr {
+    Unary(UnaryOp, Box<Self>),
+    Binary(BinaryOp, Box<Self>, Box<Self>),
+    Atom(CharClass),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Operator {
-    KleeneStar,
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum UnaryOp {
+    Star,
     Plus,
     Optional,
-    Concatenation,
-    Union,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BinaryOp {
+    Concat,
+    Alternate,
 }
