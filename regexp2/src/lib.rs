@@ -1,4 +1,3 @@
-//! 
 //! ```
 //! use regexp2::RegExp;
 //!
@@ -6,12 +5,12 @@
 //! let mut re = RegExp::new("(a|b)*abb").unwrap();
 //! assert!(re.is_match("abb"));
 //! assert!(re.is_match("aababb"));
-//! 
+//!
 //! // Any sequence of characters that are not B, C, D, E, F or any lowercase
 //! // letter.
 //! re = RegExp::new("[^B-Fa-z]*").unwrap();
 //! assert!(re.is_match("AGAQR"));
-//! 
+//!
 //! // Any sequence of at least one digit followed by nothing or an
 //! // alphanumeric or underscore.
 //! re = RegExp::new(r"\d+\w?").unwrap();
