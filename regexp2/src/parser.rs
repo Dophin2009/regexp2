@@ -236,6 +236,7 @@ where
         Ok(self.engine.handle_char(c))
     }
 
+    #[allow(dead_code)]
     #[inline]
     fn parse_single_or_escaped_char<'r>(
         &mut self,
@@ -269,6 +270,7 @@ where
         Ok(c)
     }
 
+    #[allow(dead_code)]
     #[inline]
     fn parse_single_or_escaped<'r>(
         &mut self,
@@ -487,11 +489,13 @@ impl<'r> ParseInput<'r> {
         }
     }
 
+    #[allow(dead_code)]
     #[inline]
     pub fn is_empty(&mut self) -> bool {
         self.input.peek().is_none()
     }
 
+    #[allow(dead_code)]
     #[inline]
     pub fn expr(&self) -> &str {
         self.expr
