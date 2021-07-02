@@ -91,7 +91,7 @@ impl<E: Engine> RegExp<E> {
 impl RegExp<NFA<CharClass>> {
     /// Create a compiled regular expression that uses an NFA to evaluate input strings.
     #[inline]
-    pub fn new_nfa<'r>(expr: &'r str) -> ParseResult<'r, Self> {
+    pub fn new_nfa(expr: &'_ str) -> ParseResult<'_, Self> {
         let parser = NFAParser::new();
         let nfa: NFA<CharClass> = parser.parse(expr)?;
 
@@ -113,7 +113,7 @@ impl RegExp<NFA<CharClass>> {
 impl RegExp<DFA<CharClass>> {
     /// Create a compiled regular expression that uses a DFA to evaluate input strings.
     #[inline]
-    pub fn new<'r>(expr: &'r str) -> ParseResult<'r, Self> {
+    pub fn new(expr: &'_ str) -> ParseResult<'_, Self> {
         Ok(RegExp::new_nfa(expr)?.with_dfa())
     }
 }
