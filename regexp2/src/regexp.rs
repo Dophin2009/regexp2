@@ -1,5 +1,5 @@
 use crate::class::{CharClass, CharRange};
-use crate::parser::{self, NFAParser};
+use crate::parser::{self, nfa::NFAParser};
 
 use std::convert::TryInto;
 use std::ops::Range;

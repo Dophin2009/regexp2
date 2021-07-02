@@ -1,13 +1,8 @@
-use crate::ast;
 use crate::class::CharClass;
 
-use std::hash::Hash;
 use std::iter::Peekable;
 use std::marker::PhantomData;
 use std::str::CharIndices;
-
-use automata::nfa::Transition;
-use automata::NFA;
 
 /// Alias for [`Result`] for [`ParseError`].
 pub type ParseResult<'r, T> = std::result::Result<T, ParseError<'r>>;
@@ -581,169 +576,186 @@ impl<'r> Span<'r> {
     }
 }
 
-pub type NFAParser<T> = Parser<NFAParserEngine<T>>;
+pub mod nfa {
+    use super::{Parser, ParserEngine};
+    use crate::class::CharClass;
 
-/// A regular expression parser that produces an NFA that describes the same language as the
-/// regular expression. The transitions of the NFA must be derivable from CharClass.
-pub struct NFAParserEngine<T>
-where
-    T: Clone + Eq + Hash,
-    Transition<T>: From<CharClass>,
-{
-    _phantom: PhantomData<T>,
-}
+    use std::hash::Hash;
+    use std::marker::PhantomData;
 
-impl<T> NFAParserEngine<T>
-where
-    T: Clone + Eq + Hash,
-    Transition<T>: From<CharClass>,
-{
-    /// Create a new NFAParser.
-    #[inline]
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        NFAParserEngine {
-            _phantom: PhantomData,
+    use automata::nfa::Transition;
+    use automata::NFA;
+
+    pub type NFAParser<T> = Parser<NFAParserEngine<T>>;
+
+    /// A regular expression parser that produces an NFA that describes the same language as the
+    /// regular expression. The transitions of the NFA must be derivable from CharClass.
+    pub struct NFAParserEngine<T>
+    where
+        T: Clone + Eq + Hash,
+        Transition<T>: From<CharClass>,
+    {
+        _phantom: PhantomData<T>,
+    }
+
+    impl<T> NFAParserEngine<T>
+    where
+        T: Clone + Eq + Hash,
+        Transition<T>: From<CharClass>,
+    {
+        /// Create a new NFAParser.
+        #[inline]
+        #[allow(clippy::new_without_default)]
+        pub fn new() -> Self {
+            NFAParserEngine {
+                _phantom: PhantomData,
+            }
+        }
+    }
+
+    impl<T> ParserEngine for NFAParserEngine<T>
+    where
+        T: Clone + Eq + Hash,
+        Transition<T>: From<CharClass>,
+    {
+        type Output = NFA<T>;
+
+        #[inline]
+        fn new() -> Self {
+            Self::new()
+        }
+
+        #[inline]
+        fn handle_char<C>(&mut self, c: C) -> Self::Output
+        where
+            C: Into<CharClass>,
+        {
+            let class: CharClass = c.into();
+            let transition = class.into();
+
+            let mut nfa = NFA::new();
+            let f = nfa.add_state(true);
+            nfa.add_transition(nfa.start_state, f, transition);
+            nfa
+        }
+
+        #[inline]
+        fn handle_wildcard(&mut self) -> Self::Output {
+            let class = CharClass::all_but_newline();
+            self.handle_char(class)
+        }
+
+        #[inline]
+        fn handle_star(&mut self, lhs: Self::Output) -> Self::Output {
+            NFA::kleene_star(&lhs)
+        }
+
+        #[inline]
+        fn handle_plus(&mut self, lhs: Self::Output) -> Self::Output {
+            NFA::concatenation(&NFA::kleene_star(&lhs), &lhs)
+        }
+
+        #[inline]
+        fn handle_optional(&mut self, lhs: Self::Output) -> Self::Output {
+            let c1 = NFA::new_epsilon();
+            NFA::union(&c1, &lhs)
+        }
+
+        #[inline]
+        fn handle_concat(&mut self, lhs: Self::Output, rhs: Self::Output) -> Self::Output {
+            NFA::concatenation(&lhs, &rhs)
+        }
+
+        #[inline]
+        fn handle_alternate(&mut self, lhs: Self::Output, rhs: Self::Output) -> Self::Output {
+            NFA::union(&lhs, &rhs)
         }
     }
 }
 
-impl<T> ParserEngine for NFAParserEngine<T>
-where
-    T: Clone + Eq + Hash,
-    Transition<T>: From<CharClass>,
-{
-    type Output = NFA<T>;
+pub mod ast {
+    use super::{Parser, ParserEngine};
+    use crate::ast;
+    use crate::class::CharClass;
 
-    #[inline]
-    fn new() -> Self {
-        Self::new()
-    }
+    use std::hash::Hash;
+    use std::marker::PhantomData;
 
-    #[inline]
-    fn handle_char<C>(&mut self, c: C) -> Self::Output
+    pub type ASTParser<T> = Parser<ASTParserEngine<T>>;
+
+    /// A regular expression parser that produces an AST that describes the same language as the
+    /// regular expression. The transitions of the AST must be derivable from CharClass.
+    pub struct ASTParserEngine<T>
     where
-        C: Into<CharClass>,
+        T: Clone + Eq + Hash,
     {
-        let class: CharClass = c.into();
-        let transition = class.into();
-
-        let mut nfa = NFA::new();
-        let f = nfa.add_state(true);
-        nfa.add_transition(nfa.start_state, f, transition);
-        nfa
+        _phantom: PhantomData<T>,
     }
 
-    #[inline]
-    fn handle_wildcard(&mut self) -> Self::Output {
-        let class = CharClass::all_but_newline();
-        self.handle_char(class)
-    }
-
-    #[inline]
-    fn handle_star(&mut self, lhs: Self::Output) -> Self::Output {
-        NFA::kleene_star(&lhs)
-    }
-
-    #[inline]
-    fn handle_plus(&mut self, lhs: Self::Output) -> Self::Output {
-        NFA::concatenation(&NFA::kleene_star(&lhs), &lhs)
-    }
-
-    #[inline]
-    fn handle_optional(&mut self, lhs: Self::Output) -> Self::Output {
-        let c1 = NFA::new_epsilon();
-        NFA::union(&c1, &lhs)
-    }
-
-    #[inline]
-    fn handle_concat(&mut self, lhs: Self::Output, rhs: Self::Output) -> Self::Output {
-        NFA::concatenation(&lhs, &rhs)
-    }
-
-    #[inline]
-    fn handle_alternate(&mut self, lhs: Self::Output, rhs: Self::Output) -> Self::Output {
-        NFA::union(&lhs, &rhs)
-    }
-}
-
-pub type ASTParser<T> = Parser<ASTParserEngine<T>>;
-
-/// A regular expression parser that produces an AST that describes the same language as the
-/// regular expression. The transitions of the AST must be derivable from CharClass.
-pub struct ASTParserEngine<T>
-where
-    T: Clone + Eq + Hash,
-    Transition<T>: From<CharClass>,
-{
-    _phantom: PhantomData<T>,
-}
-
-impl<T> ASTParserEngine<T>
-where
-    T: Clone + Eq + Hash,
-    Transition<T>: From<CharClass>,
-{
-    /// Create a new ASTParser.
-    #[inline]
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        ASTParserEngine {
-            _phantom: PhantomData,
+    impl<T> ASTParserEngine<T>
+    where
+        T: Clone + Eq + Hash,
+    {
+        /// Create a new ASTParser.
+        #[inline]
+        #[allow(clippy::new_without_default)]
+        pub fn new() -> Self {
+            ASTParserEngine {
+                _phantom: PhantomData,
+            }
         }
     }
-}
 
-impl<T> ParserEngine for ASTParserEngine<T>
-where
-    T: Clone + Eq + Hash,
-    Transition<T>: From<CharClass>,
-{
-    type Output = ast::Expr;
-
-    #[inline]
-    fn new() -> Self {
-        Self::new()
-    }
-
-    #[inline]
-    fn handle_char<C>(&mut self, c: C) -> Self::Output
+    impl<T> ParserEngine for ASTParserEngine<T>
     where
-        C: Into<CharClass>,
+        T: Clone + Eq + Hash,
     {
-        let class: CharClass = c.into();
-        ast::Expr::Atom(class)
-    }
+        type Output = ast::Expr;
 
-    #[inline]
-    fn handle_wildcard(&mut self) -> Self::Output {
-        let class = CharClass::all_but_newline();
-        self.handle_char(class)
-    }
+        #[inline]
+        fn new() -> Self {
+            Self::new()
+        }
 
-    #[inline]
-    fn handle_star(&mut self, lhs: Self::Output) -> Self::Output {
-        ast::Expr::Unary(ast::UnaryOp::Star, Box::new(lhs))
-    }
+        #[inline]
+        fn handle_char<C>(&mut self, c: C) -> Self::Output
+        where
+            C: Into<CharClass>,
+        {
+            let class: CharClass = c.into();
+            ast::Expr::Atom(class)
+        }
 
-    #[inline]
-    fn handle_plus(&mut self, rhs: Self::Output) -> Self::Output {
-        let lhs = self.handle_star(rhs.clone());
-        self.handle_concat(lhs, rhs)
-    }
+        #[inline]
+        fn handle_wildcard(&mut self) -> Self::Output {
+            let class = CharClass::all_but_newline();
+            self.handle_char(class)
+        }
 
-    #[inline]
-    fn handle_optional(&mut self, lhs: Self::Output) -> Self::Output {
-        ast::Expr::Unary(ast::UnaryOp::Optional, Box::new(lhs))
-    }
+        #[inline]
+        fn handle_star(&mut self, lhs: Self::Output) -> Self::Output {
+            ast::Expr::Unary(ast::UnaryOp::Star, Box::new(lhs))
+        }
 
-    #[inline]
-    fn handle_concat(&mut self, lhs: Self::Output, rhs: Self::Output) -> Self::Output {
-        ast::Expr::Binary(ast::BinaryOp::Concat, Box::new(lhs), Box::new(rhs))
-    }
+        #[inline]
+        fn handle_plus(&mut self, rhs: Self::Output) -> Self::Output {
+            let lhs = self.handle_star(rhs.clone());
+            self.handle_concat(lhs, rhs)
+        }
 
-    #[inline]
-    fn handle_alternate(&mut self, lhs: Self::Output, rhs: Self::Output) -> Self::Output {
-        ast::Expr::Binary(ast::BinaryOp::Alternate, Box::new(lhs), Box::new(rhs))
+        #[inline]
+        fn handle_optional(&mut self, lhs: Self::Output) -> Self::Output {
+            ast::Expr::Unary(ast::UnaryOp::Optional, Box::new(lhs))
+        }
+
+        #[inline]
+        fn handle_concat(&mut self, lhs: Self::Output, rhs: Self::Output) -> Self::Output {
+            ast::Expr::Binary(ast::BinaryOp::Concat, Box::new(lhs), Box::new(rhs))
+        }
+
+        #[inline]
+        fn handle_alternate(&mut self, lhs: Self::Output, rhs: Self::Output) -> Self::Output {
+            ast::Expr::Binary(ast::BinaryOp::Alternate, Box::new(lhs), Box::new(rhs))
+        }
     }
 }
