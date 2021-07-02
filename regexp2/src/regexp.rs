@@ -5,7 +5,8 @@ use std::convert::TryInto;
 use std::ops::Range;
 
 use automata::{self, convert::Disjoin, nfa::Transition, DFA, NFA};
-use parser::ParseResult;
+
+pub use parser::ParseResult;
 
 #[derive(Debug)]
 pub struct Match {
