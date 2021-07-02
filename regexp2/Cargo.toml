@@ -10,4 +10,6 @@ msrv = "1.46.0"
 
 [dependencies]
 automata = { path = "../automata" }
+
 im = "15.0"
+thiserror = "1.0"

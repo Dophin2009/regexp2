@@ -6,6 +6,8 @@ use std::convert::TryInto;
 use std::hash::Hash;
 use std::iter;
 
+use automata::convert::Disjoin;
+
 /// The lowest Unicode scalar value.
 const USV_START_1: char = '\u{0}';
 /// The upper limit of the lower interval of Unicode scalar values.
@@ -75,13 +77,40 @@ impl CharClass {
     pub fn add_range(&mut self, range: CharRange) {
         self.ranges.insert(range);
     }
+
+    #[inline]
+    pub fn add_other(&mut self, class: CharClass) {
+        class.ranges.into_iter().for_each(|r| self.add_range(r));
+    }
+
+    #[inline]
+    pub fn is_single(&self) -> bool {
+        let mut iter = self.ranges.iter();
+        let c = match iter.next() {
+            Some(r) => {
+                if r.start == r.end {
+                    r.start
+                } else {
+                    return false;
+                }
+            }
+            None => return false,
+        };
+
+        iter.all(|range| c == range.start && c == range.end)
+    }
 }
 
 impl CharClass {
     /// Create a character class of all characters except the newline character.
     #[inline]
+    pub fn newline() -> Self {
+        CharRange::new('\n', '\n').into()
+    }
+
+    #[inline]
     pub fn all_but_newline() -> Self {
-        CharRange::new('\n', '\n').complement().into()
+        Self::newline().complement()
     }
 
     /// Create a character class consisting of all Unicode letter values.
@@ -184,6 +213,15 @@ impl Extend<CharRange> for CharClass {
     }
 }
 
+impl Extend<CharClass> for CharClass {
+    #[inline]
+    fn extend<I: IntoIterator<Item = CharClass>>(&mut self, iter: I) {
+        for cc in iter {
+            self.extend(cc.ranges);
+        }
+    }
+}
+
 impl iter::FromIterator<CharRange> for CharClass {
     #[inline]
     fn from_iter<I: IntoIterator<Item = CharRange>>(iter: I) -> Self {
@@ -257,6 +295,42 @@ impl From<mergeset::IntoIter<char, CharRange>> for CharClassIntoIter {
     #[inline]
     fn from(set_iter: mergeset::IntoIter<char, CharRange>) -> Self {
         Self { set_iter }
+    }
+}
+
+impl Disjoin for CharClass {
+    /// Create a set of disjoint CharClass from a set of CharClass. Algorithm inspired by [this
+    /// Stack Overflow answer](https://stackoverflow.com/a/55482655/8955108).
+    #[inline]
+    fn disjoin(vec: Vec<&Self>) -> Vec<Self> {
+        let ranges: Vec<_> = vec.iter().flat_map(|cc| cc.ranges.clone()).collect();
+
+        let mut starts: Vec<_> = ranges.iter().map(|r| (r.start as u32, 1)).collect();
+        let mut ends: Vec<_> = ranges.iter().map(|r| (r.end as u32 + 1, -1)).collect();
+        starts.append(&mut ends);
+        starts.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut prev = 0;
+        let mut count = 0;
+        starts
+            .into_iter()
+            .filter_map(|(x, c)| {
+                let ret = if x > prev && count != 0 {
+                    let ret = CharRange::new(prev.try_into().unwrap(), (x - 1).try_into().unwrap());
+                    Some(ret.into())
+                } else {
+                    None
+                };
+                prev = x;
+                count += c;
+                ret
+            })
+            .collect()
+    }
+
+    #[inline]
+    fn contains(&self, other: &Self) -> bool {
+        !self.intersection(other).is_empty()
     }
 }
 
