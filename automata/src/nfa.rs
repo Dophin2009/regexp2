@@ -384,7 +384,7 @@ where
             *last = Some((LastIterState::Start, starting_set));
             return Some(IterState::Start(starting_set_map));
         }
-        Some((LastIterState::Start, set)) | Some((LastIterState::Normal, set)) => set,
+        Some((LastIterState::Start | LastIterState::Normal, set)) => set,
         // If we were last stuck, return None to indicate that last state was stuck.
         Some((LastIterState::Stuck, _)) => return None,
     };
