@@ -1,10 +1,9 @@
-use crate::class::{CharClass, CharRange};
+use crate::class::CharClass;
 use crate::parser::{self, nfa::NFAParser};
 
-use std::convert::TryInto;
 use std::ops::Range;
 
-use automata::{self, convert::Disjoin, nfa::Transition, DFA, NFA};
+use automata::{self, nfa::Transition, DFA, NFA};
 
 pub use parser::ParseResult;
 
@@ -173,41 +172,5 @@ impl Engine for DFA<CharClass> {
     #[inline]
     fn find_at(&self, input: &str, start: usize) -> Option<Match> {
         DFA::find_at(self, input.chars(), start).map(From::from)
-    }
-}
-
-impl Disjoin for CharClass {
-    /// Create a set of disjoint CharClass from a set of CharClass. Algorithm inspired by [this
-    /// Stack Overflow answer](https://stackoverflow.com/a/55482655/8955108).
-    #[inline]
-    fn disjoin(vec: Vec<&Self>) -> Vec<Self> {
-        let ranges: Vec<_> = vec.iter().flat_map(|cc| cc.ranges.clone()).collect();
-
-        let mut starts: Vec<_> = ranges.iter().map(|r| (r.start as u32, 1)).collect();
-        let mut ends: Vec<_> = ranges.iter().map(|r| (r.end as u32 + 1, -1)).collect();
-        starts.append(&mut ends);
-        starts.sort_by(|a, b| a.0.cmp(&b.0));
-
-        let mut prev = 0;
-        let mut count = 0;
-        starts
-            .into_iter()
-            .filter_map(|(x, c)| {
-                let ret = if x > prev && count != 0 {
-                    let ret = CharRange::new(prev.try_into().unwrap(), (x - 1).try_into().unwrap());
-                    Some(ret.into())
-                } else {
-                    None
-                };
-                prev = x;
-                count += c;
-                ret
-            })
-            .collect()
-    }
-
-    #[inline]
-    fn contains(&self, other: &Self) -> bool {
-        !self.intersection(other).is_empty()
     }
 }

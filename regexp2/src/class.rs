@@ -6,6 +6,8 @@ use std::convert::TryInto;
 use std::hash::Hash;
 use std::iter;
 
+use automata::convert::Disjoin;
+
 /// The lowest Unicode scalar value.
 const USV_START_1: char = '\u{0}';
 /// The upper limit of the lower interval of Unicode scalar values.
@@ -293,6 +295,42 @@ impl From<mergeset::IntoIter<char, CharRange>> for CharClassIntoIter {
     #[inline]
     fn from(set_iter: mergeset::IntoIter<char, CharRange>) -> Self {
         Self { set_iter }
+    }
+}
+
+impl Disjoin for CharClass {
+    /// Create a set of disjoint CharClass from a set of CharClass. Algorithm inspired by [this
+    /// Stack Overflow answer](https://stackoverflow.com/a/55482655/8955108).
+    #[inline]
+    fn disjoin(vec: Vec<&Self>) -> Vec<Self> {
+        let ranges: Vec<_> = vec.iter().flat_map(|cc| cc.ranges.clone()).collect();
+
+        let mut starts: Vec<_> = ranges.iter().map(|r| (r.start as u32, 1)).collect();
+        let mut ends: Vec<_> = ranges.iter().map(|r| (r.end as u32 + 1, -1)).collect();
+        starts.append(&mut ends);
+        starts.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut prev = 0;
+        let mut count = 0;
+        starts
+            .into_iter()
+            .filter_map(|(x, c)| {
+                let ret = if x > prev && count != 0 {
+                    let ret = CharRange::new(prev.try_into().unwrap(), (x - 1).try_into().unwrap());
+                    Some(ret.into())
+                } else {
+                    None
+                };
+                prev = x;
+                count += c;
+                ret
+            })
+            .collect()
+    }
+
+    #[inline]
+    fn contains(&self, other: &Self) -> bool {
+        !self.intersection(other).is_empty()
     }
 }
 
