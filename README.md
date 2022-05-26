@@ -1,4 +1,4 @@
-[![Build status](https://github.com/Dophin2009/regexp2/workflows/ci/badge.svg)](https://github.com/Dophin2009/regexp2/actions)
+[![Build status](https://github.com/mirryi/regexp2/workflows/ci/badge.svg)](https://github.com/mirryi/regexp2/actions)
 [![Crates.io](https://img.shields.io/crates/v/regexp2.svg)](https://crates.io/crates/regexp2)
 [![Docs.rs](https://docs.rs/regexp2/badge.svg)](https://docs.rs/regexp2)
 
